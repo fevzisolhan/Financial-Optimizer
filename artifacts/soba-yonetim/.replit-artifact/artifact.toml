@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Soba Yönetim Sistemi"
+version = "1.0.0"
+id = "artifacts/soba-yonetim"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18354
+
+[services.development]
+run = "pnpm --filter @workspace/soba-yonetim run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/soba-yonetim", "run", "build" ]
+publicDir = "artifacts/soba-yonetim/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18354"
+BASE_PATH = "/"
