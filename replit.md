@@ -114,3 +114,11 @@ Utility scripts package. Each script is a `.ts` file in `src/` with a correspond
 - **Bütçe page** (`Butce.tsx`): Monthly category budgets with progress bars, keyword-based kasa matching, bank statement CSV import with auto-categorization, preset categories. Tab `butce` under Finans.
 - **Settings → Veri Onarım tab**: Diagnose tool (orphaned records, negative stock, duplicates, localStorage size), 5 repair actions.
 - **Types**: `BudgetCategory`, `Budget` in types/index.ts; `budgets: BudgetCategory[]` in DB.
+- **Sound Feedback** (`useSoundFeedback.ts`): Web Audio API hook with 3 themes, 5 sound types, volume control.
+- **Sonner Toasts**: Replaced custom toast with Sonner; `useToast()` triggers sounds.
+- **Excel Export** (`excelExport.ts`): SheetJS/xlsx utility, Turkish headers, date/currency formatting.
+- **Dashboard Enhancement**: Horizontal scrollable stat cards with +/- navigation, pointer-drag swipe, scroll snap. Right panel with brightness control, widget management (add/remove/reorder), quick actions. Left side customizable widget area (localStorage persisted via `dashboardPrefs`). Widget options: chart, quickStats, recentSales, tips, stockAlerts, activity, excelBar, categoryChart. Responsive: right panel collapses to single column under 1100px viewport width.
+- **App layout fix**: Main content area uses `calc(100vw - 228px)` width (fixed sidebar is position:fixed, 228px wide) so grid layouts and charts are properly constrained.
+- **Selective Backup Restore**: Choose which sections to restore from JSON backup (products, sales, cari, kasa, etc.) instead of full overwrite. In Settings → Yedek & Geri Yükleme.
+- **Smart Import Multi-format**: SmartImportManager now supports JSON + CSV/TSV/TXT. CSV auto-detects column names (müşteri, tarih, tutar, etc.) with manual correction UI. Target entity selection (cari/products/kasa). Preview table shows first 3 rows.
+- **Settings tabs**: company, pellet, sound, backup, excel_export, activity, shortcuts, repair, excel, data.

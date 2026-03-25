@@ -375,7 +375,7 @@ function AppContent() {
       </aside>
 
       {/* MAIN */}
-      <div style={{ flex: 1, marginLeft: isMobile ? 0 : 228, display: 'flex', flexDirection: 'column', minHeight: '100vh', transition: 'margin-left 0.25s ease' }}>
+      <div style={{ width: isMobile ? '100vw' : 'calc(100vw - 228px)', marginLeft: isMobile ? 0 : 228, display: 'flex', flexDirection: 'column', minHeight: '100vh', transition: 'margin-left 0.25s ease', boxSizing: 'border-box' }}>
         {/* HEADER */}
         <header style={{ background: 'rgba(6,16,31,0.97)', borderBottom: '1px solid rgba(255,255,255,0.05)', padding: isMobile ? '10px 14px' : '11px 24px', display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 14, position: 'sticky', top: 0, zIndex: 90, backdropFilter: 'blur(12px)' }}>
           {isMobile && (

@@ -52,7 +52,6 @@ export default function Settings({ db, save, exportJSON, importJSON }: Props) {
   const [company, setCompany] = useState({ ...db.company });
   const [pellet, setPellet] = useState({ ...db.pelletSettings });
   const [tab, setTab] = useState<Tab>('company');
-  const importRef = useRef<HTMLInputElement>(null);
 
   const saveCompany = () => {
     save(prev => ({ ...prev, company: { ...company, id: prev.company.id, createdAt: prev.company.createdAt } }));
@@ -62,18 +61,6 @@ export default function Settings({ db, save, exportJSON, importJSON }: Props) {
   const savePellet = () => {
     save(prev => ({ ...prev, pelletSettings: { ...pellet } }));
     showToast('Pelet ayarları kaydedildi!', 'success');
-  };
-
-  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    showConfirm('Veri Yükleme', 'Mevcut verileriniz TAMAMEN silinecek ve yedeğiniz geri yüklenecek. Onaylıyor musunuz?', () => {
-      importJSON(file).then(ok => {
-        if (ok) { showToast('✅ Veriler başarıyla geri yüklendi!', 'success'); setTimeout(() => window.location.reload(), 800); }
-        else showToast('Dosya okunamadı. JSON formatını kontrol edin!', 'error');
-      });
-    }, true);
-    if (importRef.current) importRef.current.value = '';
   };
 
   const clearData = () => {
@@ -164,25 +151,14 @@ export default function Settings({ db, save, exportJSON, importJSON }: Props) {
               ))}
             </div>
             <div style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.15)', borderRadius: 10, padding: '10px 16px', marginBottom: 16, color: '#10b981', fontSize: '0.85rem', fontWeight: 600 }}>
-              ✅ Toplam {totalRecords} kayıt yedeklenecek
+              Toplam {totalRecords} kayıt yedeklenecek
             </div>
             <button onClick={exportJSON} style={{ ...btnPrimary, background: 'linear-gradient(135deg, #059669, #10b981)' }}>
-              📥 Yedeği İndir (.json)
+              Yedeği İndir (.json)
             </button>
           </Card>
 
-          <Card title="📂 Yedeği Geri Yükle">
-            <p style={{ color: '#64748b', fontSize: '0.88rem', marginBottom: 6, lineHeight: 1.6 }}>Daha önce aldığınız <strong style={{ color: '#f59e0b' }}>JSON yedek dosyasını</strong> seçin.</p>
-            <div style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: 10, padding: '10px 16px', marginBottom: 16, color: '#fca5a5', fontSize: '0.83rem' }}>
-              ⚠️ Bu işlem mevcut verilerinizin <strong>tamamını silecektir</strong>. Önce yedek almayı unutmayın!
-            </div>
-            <input ref={importRef} type="file" accept=".json" onChange={handleImport} style={{ display: 'none' }} />
-            <button onClick={() => importRef.current?.click()} style={{ width: '100%', padding: '13px 0', background: 'rgba(59,130,246,0.1)', border: '2px dashed rgba(59,130,246,0.3)', borderRadius: 12, color: '#60a5fa', cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem', transition: 'all 0.2s' }}
-              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(59,130,246,0.15)'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(59,130,246,0.1)'; }}>
-              📂 JSON Dosyası Seç & Geri Yükle
-            </button>
-          </Card>
+          <SelectiveRestore showToast={showToast} showConfirm={showConfirm as (t: string, m: string, ok: () => void, d?: boolean) => void} />
 
           <SmartImportManager db={db} save={save} showToast={showToast} showConfirm={showConfirm as (t: string, m: string, ok: () => void, d?: boolean) => void} />
         </div>
@@ -503,6 +479,186 @@ function ActivityPanel({ db, save, showToast, showConfirm }: {
   );
 }
 
+const RESTORE_SECTIONS = [
+  { key: 'products', label: 'Ürünler', icon: '📦' },
+  { key: 'sales', label: 'Satışlar', icon: '🛒' },
+  { key: 'suppliers', label: 'Tedarikçiler', icon: '🏭' },
+  { key: 'cari', label: 'Cari Hesaplar', icon: '👤' },
+  { key: 'kasa', label: 'Kasa İşlemleri', icon: '💰' },
+  { key: 'bankTransactions', label: 'Banka İşlemleri', icon: '🏦' },
+  { key: 'invoices', label: 'Faturalar', icon: '🧾' },
+  { key: 'orders', label: 'Siparişler', icon: '📋' },
+  { key: 'stockMovements', label: 'Stok Hareketleri', icon: '📊' },
+  { key: 'peletSuppliers', label: 'Pelet Tedarikçi', icon: '🪵' },
+  { key: 'peletOrders', label: 'Pelet Sipariş', icon: '🪵' },
+  { key: 'boruSuppliers', label: 'Boru Tedarikçi', icon: '🔩' },
+  { key: 'boruOrders', label: 'Boru Sipariş', icon: '🔩' },
+  { key: 'budgets', label: 'Bütçe', icon: '📊' },
+  { key: 'returns', label: 'İadeler', icon: '↩️' },
+  { key: 'company', label: 'Şirket Bilgileri', icon: '🏢', isObject: true },
+  { key: 'pelletSettings', label: 'Pelet Ayarları', icon: '⚙️', isObject: true },
+] as const;
+
+function SelectiveRestore({ showToast, showConfirm }: {
+  showToast: (m: string, t?: string) => void;
+  showConfirm: (t: string, m: string, ok: () => void, d?: boolean) => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [fileData, setFileData] = useState<Record<string, unknown> | null>(null);
+  const [fileName, setFileName] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [available, setAvailable] = useState<{ key: string; label: string; icon: string; count: number; isObject?: boolean }[]>([]);
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target?.result as string);
+        if (typeof data !== 'object' || Array.isArray(data)) {
+          showToast('Geçersiz JSON formatı!', 'error');
+          return;
+        }
+        setFileData(data);
+        const avail: typeof available = [];
+        RESTORE_SECTIONS.forEach(s => {
+          const val = data[s.key];
+          if (s.key === 'company' || s.key === 'pelletSettings') {
+            if (val && typeof val === 'object' && !Array.isArray(val)) {
+              avail.push({ key: s.key, label: s.label, icon: s.icon, count: 1, isObject: true });
+            }
+          } else if (Array.isArray(val) && val.length > 0) {
+            avail.push({ key: s.key, label: s.label, icon: s.icon, count: val.length });
+          }
+        });
+        setAvailable(avail);
+        setSelected(new Set(avail.map(a => a.key)));
+      } catch {
+        showToast('JSON ayrıştırılamadı!', 'error');
+      }
+    };
+    reader.readAsText(file);
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const toggleSection = (key: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  const selectAll = () => setSelected(new Set(available.map(a => a.key)));
+  const selectNone = () => setSelected(new Set());
+
+  const doRestore = () => {
+    if (!fileData || selected.size === 0) return;
+    const selCount = available.filter(a => selected.has(a.key)).reduce((s, a) => s + a.count, 0);
+    showConfirm(
+      'Seçimli Geri Yükleme',
+      `${selected.size} bölüm (${selCount} kayıt) geri yüklenecek. Seçilen bölümlerdeki mevcut veriler değiştirilecek. Devam edilsin mi?`,
+      () => {
+        try {
+          const raw = localStorage.getItem('sobaYonetim');
+          const current = raw ? JSON.parse(raw) : {};
+          selected.forEach(key => {
+            current[key] = fileData[key];
+          });
+          localStorage.setItem('sobaYonetim', JSON.stringify(current));
+          showToast(`${selected.size} bölüm başarıyla geri yüklendi! Sayfa yenilenecek...`, 'success');
+          setTimeout(() => window.location.reload(), 1200);
+        } catch {
+          showToast('Geri yükleme sırasında hata oluştu!', 'error');
+        }
+      },
+      true
+    );
+  };
+
+  const reset = () => { setFileData(null); setFileName(''); setSelected(new Set()); setAvailable([]); };
+
+  return (
+    <Card title="📂 Seçimli Geri Yükleme">
+      <p style={{ color: '#64748b', fontSize: '0.88rem', marginBottom: 14, lineHeight: 1.6 }}>
+        Yedek dosyanızdan <strong style={{ color: '#f59e0b' }}>istediğiniz bölümleri seçerek</strong> geri yükleyin. Tüm veriyi değiştirmek zorunda değilsiniz.
+      </p>
+
+      {!fileData ? (
+        <>
+          <input ref={fileRef} type="file" accept=".json" onChange={handleFile} style={{ display: 'none' }} />
+          <button onClick={() => fileRef.current?.click()} style={{ width: '100%', padding: '16px 0', background: 'rgba(59,130,246,0.08)', border: '2px dashed rgba(59,130,246,0.3)', borderRadius: 12, color: '#60a5fa', cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem', transition: 'all 0.2s' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(59,130,246,0.15)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(59,130,246,0.08)'; }}>
+            JSON Yedek Dosyası Seç
+          </button>
+        </>
+      ) : (
+        <div style={{ display: 'grid', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.15)', borderRadius: 10 }}>
+            <span style={{ color: '#10b981', fontSize: '1.1rem' }}>📄</span>
+            <span style={{ color: '#10b981', fontWeight: 700, fontSize: '0.88rem', flex: 1 }}>{fileName}</span>
+            <span style={{ color: '#64748b', fontSize: '0.78rem' }}>{available.length} bölüm bulundu</span>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.9rem' }}>Geri Yüklenecek Bölümler:</span>
+            <button onClick={selectAll} style={{ padding: '4px 10px', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 6, color: '#10b981', cursor: 'pointer', fontWeight: 600, fontSize: '0.75rem' }}>Tümünü Seç</button>
+            <button onClick={selectNone} style={{ padding: '4px 10px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 6, color: '#ef4444', cursor: 'pointer', fontWeight: 600, fontSize: '0.75rem' }}>Hiçbirini Seçme</button>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+            {available.map(section => {
+              const isSelected = selected.has(section.key);
+              return (
+                <div key={section.key} onClick={() => toggleSection(section.key)} style={{
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+                  background: isSelected ? 'rgba(59,130,246,0.08)' : 'rgba(0,0,0,0.2)',
+                  border: `1px solid ${isSelected ? 'rgba(59,130,246,0.3)' : 'rgba(255,255,255,0.04)'}`,
+                  borderRadius: 10, cursor: 'pointer', transition: 'all 0.15s',
+                }}>
+                  <div style={{
+                    width: 22, height: 22, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: isSelected ? '#3b82f6' : 'rgba(255,255,255,0.06)',
+                    border: `1px solid ${isSelected ? '#3b82f6' : 'rgba(255,255,255,0.12)'}`,
+                    color: '#fff', fontSize: '0.7rem', fontWeight: 700, flexShrink: 0,
+                  }}>
+                    {isSelected ? '✓' : ''}
+                  </div>
+                  <span style={{ fontSize: '0.95rem' }}>{section.icon}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ color: isSelected ? '#f1f5f9' : '#64748b', fontWeight: 600, fontSize: '0.82rem' }}>{section.label}</div>
+                    <div style={{ color: '#334155', fontSize: '0.72rem' }}>
+                      {section.isObject ? 'Ayarlar' : `${section.count} kayıt`}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {selected.size > 0 && (
+            <div style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.15)', borderRadius: 10, padding: '10px 16px', color: '#fde68a', fontSize: '0.83rem' }}>
+              Seçilen {selected.size} bölümdeki mevcut veriler yedekteki verilerle değiştirilecek. Diğer bölümler dokunulmayacak.
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 10 }}>
+            {selected.size > 0 && (
+              <button onClick={doRestore} style={{ flex: 1, padding: '12px 0', background: 'linear-gradient(135deg, #2563eb, #3b82f6)', border: 'none', borderRadius: 10, color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem' }}>
+                {selected.size} Bölümü Geri Yükle
+              </button>
+            )}
+            <button onClick={reset} style={{ padding: '12px 18px', background: '#273548', border: '1px solid #334155', borderRadius: 10, color: '#94a3b8', cursor: 'pointer', fontWeight: 600 }}>Sıfırla</button>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 const KNOWN_ARRAYS: Record<string, string> = {
   products: 'Ürünler', sales: 'Satışlar', suppliers: 'Tedarikçiler', cari: 'Cari Müşteriler',
   kasa: 'Kasa Hareketleri', bankTransactions: 'Banka İşlemleri', orders: 'Siparişler',
@@ -528,6 +684,73 @@ interface ConflictInfo {
   total: number;
 }
 
+const CSV_COLUMN_MAP: Record<string, { target: string; field: string }> = {
+  'müşteri': { target: 'cari', field: 'name' },
+  'musteri': { target: 'cari', field: 'name' },
+  'müşteri adı': { target: 'cari', field: 'name' },
+  'ad': { target: 'cari', field: 'name' },
+  'isim': { target: 'cari', field: 'name' },
+  'ad soyad': { target: 'cari', field: 'name' },
+  'telefon': { target: 'cari', field: 'phone' },
+  'tel': { target: 'cari', field: 'phone' },
+  'adres': { target: 'cari', field: 'address' },
+  'bakiye': { target: 'cari', field: 'balance' },
+  'borç': { target: 'cari', field: 'balance' },
+  'borc': { target: 'cari', field: 'balance' },
+  'tarih': { target: '_date', field: 'createdAt' },
+  'date': { target: '_date', field: 'createdAt' },
+  'tutar': { target: '_amount', field: 'amount' },
+  'toplam': { target: '_amount', field: 'total' },
+  'fiyat': { target: '_amount', field: 'price' },
+  'ürün': { target: 'products', field: 'name' },
+  'urun': { target: 'products', field: 'name' },
+  'ürün adı': { target: 'products', field: 'name' },
+  'stok': { target: 'products', field: 'stock' },
+  'maliyet': { target: 'products', field: 'cost' },
+  'satış fiyatı': { target: 'products', field: 'price' },
+  'kategori': { target: '_category', field: 'category' },
+  'açıklama': { target: '_desc', field: 'description' },
+  'aciklama': { target: '_desc', field: 'description' },
+  'not': { target: '_desc', field: 'note' },
+  'e-posta': { target: 'cari', field: 'email' },
+  'email': { target: 'cari', field: 'email' },
+};
+
+function parseCSV(text: string): Record<string, string>[] {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(/[,;\t]/).map(h => h.trim().replace(/^["']|["']$/g, ''));
+  return lines.slice(1).map(line => {
+    const values = line.split(/[,;\t]/).map(v => v.trim().replace(/^["']|["']$/g, ''));
+    const row: Record<string, string> = {};
+    headers.forEach((h, i) => { row[h] = values[i] || ''; });
+    return row;
+  }).filter(row => Object.values(row).some(v => v !== ''));
+}
+
+interface CsvColumnMapping {
+  csvColumn: string;
+  targetEntity: string;
+  targetField: string;
+  autoDetected: boolean;
+}
+
+function detectCsvColumns(headers: string[]): CsvColumnMapping[] {
+  return headers.map(h => {
+    const lower = h.toLowerCase().trim();
+    const match = CSV_COLUMN_MAP[lower];
+    if (match) {
+      return { csvColumn: h, targetEntity: match.target, targetField: match.field, autoDetected: true };
+    }
+    for (const [key, val] of Object.entries(CSV_COLUMN_MAP)) {
+      if (lower.includes(key)) {
+        return { csvColumn: h, targetEntity: val.target, targetField: val.field, autoDetected: true };
+      }
+    }
+    return { csvColumn: h, targetEntity: '', targetField: '', autoDetected: false };
+  });
+}
+
 function SmartImportManager({ db, save: _save, showToast, showConfirm }: {
   db: DB;
   save: (fn: (prev: DB) => DB) => void;
@@ -535,7 +758,7 @@ function SmartImportManager({ db, save: _save, showToast, showConfirm }: {
   showConfirm: (t: string, m: string, ok: () => void, d?: boolean) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const [stage, setStage] = useState<'idle' | 'mapping' | 'preview' | 'done'>('idle');
+  const [stage, setStage] = useState<'idle' | 'mapping' | 'csvMapping' | 'preview' | 'done'>('idle');
   const [rawData, setRawData] = useState<Record<string, unknown> | null>(null);
   const [mapped, setMapped] = useState<Record<string, unknown> | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
@@ -546,6 +769,9 @@ function SmartImportManager({ db, save: _save, showToast, showConfirm }: {
   const [fieldMappings, setFieldMappings] = useState<Record<string, string>>({});
   const [unknownFields, setUnknownFields] = useState<string[]>([]);
   const [legacyMapped, setLegacyMapped] = useState<Record<string, string>>({});
+  const [csvRows, setCsvRows] = useState<Record<string, string>[]>([]);
+  const [csvMappings, setCsvMappings] = useState<CsvColumnMapping[]>([]);
+  const [csvTarget, setCsvTarget] = useState<string>('cari');
 
   const detectFieldMappings = (data: Record<string, unknown>) => {
     const unknown: string[] = [];
@@ -623,10 +849,31 @@ function SmartImportManager({ db, save: _save, showToast, showConfirm }: {
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
     const reader = new FileReader();
     reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+
+      if (ext === 'csv' || ext === 'tsv' || ext === 'txt') {
+        const rows = parseCSV(text);
+        if (rows.length === 0) {
+          setErrors(['CSV dosyası boş veya geçersiz format']);
+          setStage('preview');
+          return;
+        }
+        setCsvRows(rows);
+        const headers = Object.keys(rows[0]);
+        const mappings = detectCsvColumns(headers);
+        setCsvMappings(mappings);
+        const hasCariCols = mappings.some(m => m.targetEntity === 'cari');
+        const hasProductCols = mappings.some(m => m.targetEntity === 'products');
+        setCsvTarget(hasCariCols ? 'cari' : hasProductCols ? 'products' : 'cari');
+        setStage('csvMapping');
+        return;
+      }
+
       try {
-        const data = JSON.parse(ev.target?.result as string);
+        const data = JSON.parse(text);
         if (typeof data !== 'object' || Array.isArray(data)) {
           setErrors(['Geçersiz JSON formatı — nesne bekleniyor']);
           setStage('preview');
@@ -647,13 +894,58 @@ function SmartImportManager({ db, save: _save, showToast, showConfirm }: {
           proceedToPreview(data, {});
         }
       } catch {
-        setErrors(['JSON ayrıştırılamadı — dosya bozuk veya geçersiz format']);
+        setErrors(['Dosya ayrıştırılamadı — JSON veya CSV formatını kontrol edin']);
         setStage('preview');
         setRawData(null);
       }
     };
     reader.readAsText(file);
     if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const applyCsvImport = () => {
+    if (csvRows.length === 0) return;
+    const items: Record<string, unknown>[] = csvRows.map(row => {
+      const item: Record<string, unknown> = { id: crypto.randomUUID(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      csvMappings.forEach(m => {
+        if (!m.targetField || m.targetField === '') return;
+        const val = row[m.csvColumn];
+        if (!val) return;
+        const numFields = ['balance', 'amount', 'total', 'price', 'stock', 'cost', 'quantity'];
+        if (numFields.includes(m.targetField)) {
+          item[m.targetField] = parseFloat(val.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0;
+        } else if (m.targetField === 'createdAt') {
+          try { item.createdAt = new Date(val).toISOString(); } catch { /* keep default */ }
+        } else {
+          item[m.targetField] = val;
+        }
+      });
+      if (csvTarget === 'cari') {
+        if (!item.type) item.type = 'musteri';
+        if (!item.balance) item.balance = 0;
+        if (!item.totalPurchases) item.totalPurchases = 0;
+      }
+      if (csvTarget === 'products') {
+        if (!item.stock) item.stock = 0;
+        if (!item.cost) item.cost = 0;
+        if (!item.price) item.price = 0;
+        if (!item.minStock) item.minStock = 5;
+        if (!item.category) item.category = '';
+      }
+      if (csvTarget === 'kasa') {
+        if (!item.type) item.type = 'gider';
+        if (!item.kasa) item.kasa = 'nakit';
+        if (!item.amount) item.amount = 0;
+        if (!item.description) item.description = (item.name as string) || 'CSV İçe Aktarma';
+        if (!item.category) item.category = 'diger';
+      }
+      return item;
+    });
+
+    const data: Record<string, unknown> = {};
+    data[csvTarget] = items;
+    setRawData(data);
+    proceedToPreview(data, {});
   };
 
   const proceedToPreview = (data: Record<string, unknown>, userMappings: Record<string, string>) => {
@@ -732,6 +1024,7 @@ function SmartImportManager({ db, save: _save, showToast, showConfirm }: {
   const reset = () => {
     setStage('idle'); setRawData(null); setMapped(null); setErrors([]); setWarnings([]);
     setStats({}); setConflicts([]); setResolutions({}); setFieldMappings({}); setUnknownFields([]); setLegacyMapped({});
+    setCsvRows([]); setCsvMappings([]); setCsvTarget('cari');
   };
 
   const btnStyle = (active: boolean, color: string) => ({
@@ -743,16 +1036,114 @@ function SmartImportManager({ db, save: _save, showToast, showConfirm }: {
   return (
     <Card title="🧠 Akıllı Veri İçe Aktarma">
       <p style={{ color: '#64748b', fontSize: '0.88rem', marginBottom: 14, lineHeight: 1.6 }}>
-        JSON yedek dosyanızı analiz eder; eski format alanlarını otomatik eşler, yeni alanlar için eşleme seçenekleri sunar ve çakışmaları çözerek güvenli aktarım yapar.
+        JSON, CSV veya TXT dosyanızı analiz eder; kolonları otomatik eşler (müşteri, tarih, tutar vb.), manuel düzeltme imkanı sunar ve çakışmaları çözerek güvenli aktarım yapar.
       </p>
 
       {stage === 'idle' && (
         <>
-          <input ref={fileRef} type="file" accept=".json" onChange={handleFile} style={{ display: 'none' }} />
+          <input ref={fileRef} type="file" accept=".json,.csv,.tsv,.txt" onChange={handleFile} style={{ display: 'none' }} />
           <button onClick={() => fileRef.current?.click()} style={{ width: '100%', padding: '16px 0', background: 'rgba(139,92,246,0.08)', border: '2px dashed rgba(139,92,246,0.3)', borderRadius: 12, color: '#a78bfa', cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem' }}>
-            🧠 JSON Dosyası Seç & Akıllı Analiz Başlat
+            Dosya Seç & Akıllı Analiz Başlat
           </button>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, justifyContent: 'center' }}>
+            {['JSON', 'CSV', 'TSV', 'TXT'].map(f => (
+              <span key={f} style={{ padding: '3px 10px', background: 'rgba(139,92,246,0.06)', border: '1px solid rgba(139,92,246,0.15)', borderRadius: 6, color: '#a78bfa', fontSize: '0.72rem', fontWeight: 600 }}>.{f.toLowerCase()}</span>
+            ))}
+          </div>
         </>
+      )}
+
+      {stage === 'csvMapping' && csvRows.length > 0 && (
+        <div style={{ display: 'grid', gap: 14 }}>
+          <div style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 10, padding: '12px 16px' }}>
+            <div style={{ color: '#10b981', fontWeight: 700, marginBottom: 4 }}>{csvRows.length} satır okundu</div>
+            <div style={{ color: '#64748b', fontSize: '0.82rem' }}>Kolon eşleşmelerini kontrol edin ve gerekirse düzeltin</div>
+          </div>
+
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <span style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.9rem' }}>Hedef Veri Türü:</span>
+              {[
+                { id: 'cari', label: 'Cari Müşteri', icon: '👤' },
+                { id: 'products', label: 'Ürün', icon: '📦' },
+                { id: 'kasa', label: 'Kasa', icon: '💰' },
+              ].map(t => (
+                <button key={t.id} onClick={() => setCsvTarget(t.id)} style={{
+                  padding: '6px 14px', border: `1px solid ${csvTarget === t.id ? '#ff5722' : '#334155'}`,
+                  borderRadius: 8, background: csvTarget === t.id ? 'rgba(255,87,34,0.15)' : 'transparent',
+                  color: csvTarget === t.id ? '#ff7043' : '#64748b', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem',
+                }}>{t.icon} {t.label}</button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.9rem' }}>Kolon Eşleşmeleri</div>
+          {csvMappings.map((m, i) => (
+            <div key={m.csvColumn} style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <div style={{ minWidth: 140, padding: '6px 10px', background: 'rgba(0,0,0,0.3)', borderRadius: 6, color: m.autoDetected ? '#10b981' : '#f59e0b', fontFamily: 'monospace', fontSize: '0.82rem', fontWeight: 600 }}>
+                {m.csvColumn}
+                {m.autoDetected && <span style={{ fontSize: '0.65rem', marginLeft: 4, color: '#10b981' }}>otomatik</span>}
+              </div>
+              <span style={{ color: '#475569' }}>→</span>
+              <select
+                value={m.targetField}
+                onChange={e => {
+                  const next = [...csvMappings];
+                  next[i] = { ...next[i], targetField: e.target.value, autoDetected: false };
+                  setCsvMappings(next);
+                }}
+                style={{ flex: 1, padding: '7px 10px', background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', fontSize: '0.82rem' }}
+              >
+                <option value="">— Yoksay —</option>
+                <option value="name">Ad / İsim</option>
+                <option value="phone">Telefon</option>
+                <option value="email">E-posta</option>
+                <option value="address">Adres</option>
+                <option value="balance">Bakiye / Borç</option>
+                <option value="amount">Tutar</option>
+                <option value="total">Toplam</option>
+                <option value="price">Fiyat</option>
+                <option value="cost">Maliyet</option>
+                <option value="stock">Stok</option>
+                <option value="category">Kategori</option>
+                <option value="description">Açıklama</option>
+                <option value="note">Not</option>
+                <option value="createdAt">Tarih</option>
+              </select>
+            </div>
+          ))}
+
+          {csvRows.length > 0 && (
+            <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: '12px 16px', overflowX: 'auto' }}>
+              <div style={{ color: '#64748b', fontWeight: 700, fontSize: '0.78rem', marginBottom: 8 }}>Önizleme (ilk 3 satır):</div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                <thead>
+                  <tr>
+                    {Object.keys(csvRows[0]).map(h => (
+                      <th key={h} style={{ padding: '4px 8px', textAlign: 'left', color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.06)', whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {csvRows.slice(0, 3).map((row, ri) => (
+                    <tr key={ri}>
+                      {Object.values(row).map((v, ci) => (
+                        <td key={ci} style={{ padding: '4px 8px', color: '#e2e8f0', borderBottom: '1px solid rgba(255,255,255,0.03)', whiteSpace: 'nowrap', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>{v}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={applyCsvImport} style={{ flex: 1, padding: '11px 0', background: 'linear-gradient(135deg, #7c3aed, #8b5cf6)', border: 'none', borderRadius: 10, color: '#fff', fontWeight: 700, cursor: 'pointer' }}>
+              Devam → Önizleme & Çakışma Çözümü
+            </button>
+            <button onClick={reset} style={{ padding: '11px 18px', background: '#273548', border: '1px solid #334155', borderRadius: 10, color: '#94a3b8', cursor: 'pointer' }}>Sıfırla</button>
+          </div>
+        </div>
       )}
 
       {stage === 'mapping' && rawData && (
