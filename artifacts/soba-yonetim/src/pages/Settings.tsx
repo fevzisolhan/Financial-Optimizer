@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import ExcelImport from '@/pages/ExcelImport';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import type { DB } from '@/types';
@@ -11,6 +12,7 @@ const TABS_LIST = [
   { id: 'backup', icon: '💾', label: 'Yedek & Geri Yükleme' },
   { id: 'shortcuts', icon: '⌨️', label: 'Kısayollar' },
   { id: 'repair', icon: '🔧', label: 'Veri Onarım' },
+  { id: 'excel', icon: '📥', label: 'Excel İçe Aktar' },
   { id: 'data', icon: '🗄️', label: 'Veri Yönetimi' },
 ] as const;
 
@@ -180,6 +182,11 @@ export default function Settings({ db, save, exportJSON, importJSON }: Props) {
       {/* Veri Onarım */}
       {tab === 'repair' && (
         <VeriOnarim db={db} save={save} showToast={showToast} showConfirm={showConfirm as (title: string, msg: string, onOk: () => void, danger?: boolean) => void} />
+      )}
+
+      {/* Excel İçe Aktar */}
+      {tab === 'excel' && (
+        <ExcelImport db={db} save={save} />
       )}
 
       {/* Veri Yönetimi */}
