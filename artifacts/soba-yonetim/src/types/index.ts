@@ -306,8 +306,25 @@ export interface Invoice {
   status: 'taslak' | 'onaylandi' | 'iptal' | 'odendi';
   dueDate?: string;
   note?: string;
+  kasaEntryId?: string;
+  cariUpdated?: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface BudgetCategory {
+  id: string;
+  name: string;
+  icon: string;
+  monthlyLimit: number;
+  color: string;
+  kasaCategories: string[];
+}
+
+export interface Budget {
+  categories: BudgetCategory[];
+  year: number;
+  month: number;
 }
 
 export interface DB {
@@ -337,6 +354,7 @@ export interface DB {
   };
   pelletSettings: PelletSettings;
   invoices: Invoice[];
+  budgets: BudgetCategory[];
   ortakEmanetler: unknown[];
   installments: unknown[];
 }

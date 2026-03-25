@@ -97,3 +97,20 @@ Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHea
 ### `scripts` (`@workspace/scripts`)
 
 Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
+
+## Soba Yönetim Sistemi — Feature Log
+
+### Key architecture
+- All data in `localStorage` key `sobaYonetim` (no backend DB for UI)
+- Dark theme: `#070e1c` bg, `#ff5722` orange accent, inline styles
+- API server on port 8080 for AI proxy (`/api/ai`)
+
+### Modules (tab IDs)
+`dashboard`, `products`, `sales`, `fatura`, `suppliers`, `pelet`, `boruTed`, `cari`, `kasa`, `butce`, `bank`, `reports`, `stock`, `monitor`, `ai`, `entegrasyon`, `partners`, `settings`
+
+### Recent additions (March 2026)
+- **Fatura → Kasa/Cari auto-integration**: `updateStatus` → 'odendi' creates Kasa entry; 'onaylandi' + payment='cari' updates Cari balance; 'iptal' reverses Kasa entry. Tracked via `kasaEntryId` & `cariUpdated` on Invoice type.
+- **Cari Müşteri Geçmişi tabs**: Ödemeler / Satışlar / Faturalar tabs in detail modal + 4 stat cards.
+- **Bütçe page** (`Butce.tsx`): Monthly category budgets with progress bars, keyword-based kasa matching, bank statement CSV import with auto-categorization, preset categories. Tab `butce` under Finans.
+- **Settings → Veri Onarım tab**: Diagnose tool (orphaned records, negative stock, duplicates, localStorage size), 5 repair actions.
+- **Types**: `BudgetCategory`, `Budget` in types/index.ts; `budgets: BudgetCategory[]` in DB.

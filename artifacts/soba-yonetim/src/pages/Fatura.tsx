@@ -114,8 +114,55 @@ export default function Fatura({ db, save }: Props) {
   };
 
   const updateStatus = (id: string, status: Invoice['status']) => {
-    save(prev => ({ ...prev, invoices: (prev.invoices || []).map(i => i.id === id ? { ...i, status, updatedAt: new Date().toISOString() } : i) }));
-    showToast('Durum güncellendi!');
+    save(prev => {
+      const nowIso = new Date().toISOString();
+      const inv = (prev.invoices || []).find(i => i.id === id);
+      if (!inv) return prev;
+
+      let kasa = [...prev.kasa];
+      let cari = [...prev.cari];
+      let kasaEntryId = inv.kasaEntryId;
+      let cariUpdated = inv.cariUpdated;
+
+      if (status === 'odendi' && !inv.kasaEntryId && inv.payment !== 'cari') {
+        const entry = {
+          id: genId(),
+          type: (inv.type === 'satis' ? 'gelir' : 'gider') as 'gelir' | 'gider',
+          category: inv.type === 'satis' ? 'satis' : 'alis_fatura',
+          amount: inv.total,
+          kasa: (inv.payment === 'nakit' ? 'nakit' : 'banka') as 'nakit' | 'banka',
+          description: `Fatura: ${inv.invoiceNo} — ${inv.cariName}`,
+          relatedId: id,
+          cariId: inv.cariId,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        };
+        kasa = [...kasa, entry];
+        kasaEntryId = entry.id;
+        showToast(`💰 Kasa otomatik güncellendi: ${inv.type === 'satis' ? '+' : '-'}${inv.total.toLocaleString('tr-TR')} ₺`);
+      }
+
+      if (status === 'onaylandi' && inv.payment === 'cari' && inv.cariId && !cariUpdated) {
+        cari = cari.map(c => {
+          if (c.id === inv.cariId) {
+            const delta = inv.type === 'satis' ? inv.total : -inv.total;
+            return { ...c, balance: (c.balance || 0) + delta, lastTransaction: nowIso, updatedAt: nowIso };
+          }
+          return c;
+        });
+        cariUpdated = true;
+        showToast(`👤 Cari bakiye güncellendi: ${inv.cariName}`);
+      }
+
+      if (status === 'iptal' && inv.kasaEntryId) {
+        kasa = kasa.filter(k => k.id !== inv.kasaEntryId);
+        kasaEntryId = undefined;
+      }
+
+      const invoices = (prev.invoices || []).map(i => i.id === id ? { ...i, status, kasaEntryId, cariUpdated, updatedAt: nowIso } : i);
+      return { ...prev, invoices, kasa, cari };
+    });
+    if (status !== 'odendi' && status !== 'onaylandi') showToast('Durum güncellendi!');
   };
 
   const deleteInvoice = (id: string) => {

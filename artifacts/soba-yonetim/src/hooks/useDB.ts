@@ -32,6 +32,7 @@ function makeDefaultDB(): DB {
     boruSuppliers: [],
     boruOrders: [],
     invoices: [],
+    budgets: [],
     returns: [],
     _activityLog: [],
     company: { id: genId(), createdAt: nowIso },
@@ -68,6 +69,7 @@ function loadFromStorage(): DB {
     if (!Array.isArray(merged.boruSuppliers)) merged.boruSuppliers = [];
     if (!Array.isArray(merged.boruOrders)) merged.boruOrders = [];
     if (!Array.isArray(merged.invoices)) merged.invoices = [];
+    if (!Array.isArray(merged.budgets)) merged.budgets = [];
     if (!Array.isArray(merged.returns)) merged.returns = [];
     if (!Array.isArray(merged._activityLog)) merged._activityLog = [];
     if (!Array.isArray(merged.ortakEmanetler)) merged.ortakEmanetler = [];

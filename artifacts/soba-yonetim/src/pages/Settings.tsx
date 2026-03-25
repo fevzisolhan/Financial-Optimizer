@@ -10,6 +10,7 @@ const TABS_LIST = [
   { id: 'pellet', icon: '🪵', label: 'Pelet' },
   { id: 'backup', icon: '💾', label: 'Yedek & Geri Yükleme' },
   { id: 'shortcuts', icon: '⌨️', label: 'Kısayollar' },
+  { id: 'repair', icon: '🔧', label: 'Veri Onarım' },
   { id: 'data', icon: '🗄️', label: 'Veri Yönetimi' },
 ] as const;
 
@@ -176,6 +177,11 @@ export default function Settings({ db, save, exportJSON, importJSON }: Props) {
         </Card>
       )}
 
+      {/* Veri Onarım */}
+      {tab === 'repair' && (
+        <VeriOnarim db={db} save={save} showToast={showToast} showConfirm={showConfirm as (title: string, msg: string, onOk: () => void, danger?: boolean) => void} />
+      )}
+
       {/* Veri Yönetimi */}
       {tab === 'data' && (
         <div style={{ display: 'grid', gap: 14 }}>
@@ -230,6 +236,168 @@ export default function Settings({ db, save, exportJSON, importJSON }: Props) {
           </Card>
         </div>
       )}
+    </div>
+  );
+}
+
+function VeriOnarim({ db, save, showToast, showConfirm }: { db: DB; save: (fn: (prev: DB) => DB) => void; showToast: (m: string, t?: string) => void; showConfirm: (title: string, msg: string, onOk: () => void, danger?: boolean) => void }) {
+  const [results, setResults] = useState<string[]>([]);
+
+  const diagnose = () => {
+    const issues: string[] = [];
+    // Duplicate sales check
+    const saleIds = db.sales.map(s => s.id);
+    const dupSales = saleIds.length - new Set(saleIds).size;
+    if (dupSales > 0) issues.push(`⚠️ ${dupSales} tekrarlanan satış kaydı`);
+
+    // Negative stock
+    const negStock = db.products.filter(p => p.stock < 0).length;
+    if (negStock > 0) issues.push(`⚠️ ${negStock} ürünün stok değeri negatif`);
+
+    // Orphaned kasa entries (cariId points to nonexistent cari)
+    const cariIds = new Set(db.cari.map(c => c.id));
+    const orphanKasa = db.kasa.filter(k => k.cariId && !cariIds.has(k.cariId)).length;
+    if (orphanKasa > 0) issues.push(`⚠️ ${orphanKasa} kasa kaydı silinmiş cariye bağlı`);
+
+    // Products with no stock movement but has sales
+    const soldProductIds = new Set(db.sales.flatMap(s => s.items?.map((i: { productId: string }) => i.productId) || [s.productId]).filter(Boolean));
+    const stocklessProducts = db.products.filter(p => soldProductIds.has(p.id) && p.stock === 0).length;
+    if (stocklessProducts > 0) issues.push(`ℹ️ ${stocklessProducts} ürün satıldı ama stok sıfır`);
+
+    // Missing company info
+    if (!db.company.name) issues.push('ℹ️ Şirket adı girilmemiş (Fatura/Raporlarda görünür)');
+
+    // localStorage size
+    const lsSize = new Blob([localStorage.getItem('sobaYonetim') || '']).size;
+    const lsKB = Math.round(lsSize / 1024);
+    issues.push(`📊 localStorage boyutu: ${lsKB} KB (limit ~5MB)`);
+
+    // Invoice without cari link
+    const orphanInvoices = (db.invoices || []).filter(inv => inv.cariId && !cariIds.has(inv.cariId)).length;
+    if (orphanInvoices > 0) issues.push(`⚠️ ${orphanInvoices} fatura silinmiş cariye bağlı`);
+
+    setResults(issues.length === 0 ? ['✅ Veri tutarlılık kontrolü tamam. Sorun bulunamadı!'] : issues);
+  };
+
+  const fixNegativeStock = () => {
+    showConfirm('Stok Düzelt', 'Negatif stoklar sıfıra çekilecek. Devam edilsin mi?', () => {
+      save(prev => ({ ...prev, products: prev.products.map(p => p.stock < 0 ? { ...p, stock: 0 } : p) }));
+      showToast('Negatif stoklar düzeltildi!');
+      diagnose();
+    });
+  };
+
+  const fixOrphanKasa = () => {
+    showConfirm('Orphan Temizle', 'Silinmiş cariye ait kasa kayıtlarındaki cari bağlantısı kaldırılacak. Devam?', () => {
+      const cariIds = new Set(db.cari.map(c => c.id));
+      save(prev => ({ ...prev, kasa: prev.kasa.map(k => k.cariId && !cariIds.has(k.cariId) ? { ...k, cariId: undefined } : k) }));
+      showToast('Orphan kasa kayıtları düzeltildi!');
+      diagnose();
+    });
+  };
+
+  const recalcCariBalance = () => {
+    showConfirm('Bakiye Yeniden Hesapla', 'Tüm cari bakiyeleri kasa işlemlerine göre sıfırdan hesaplanacak. Mevcut bakiyeler SIFIRLANACAK!', () => {
+      save(prev => {
+        const cari = prev.cari.map(c => {
+          const kasaEntries = prev.kasa.filter(k => k.cariId === c.id);
+          const newBalance = kasaEntries.reduce((s, k) => s + (k.type === 'gelir' ? k.amount : -k.amount), 0);
+          return { ...c, balance: newBalance };
+        });
+        return { ...prev, cari };
+      });
+      showToast('Cari bakiyeler yeniden hesaplandı!');
+      diagnose();
+    }, true);
+  };
+
+  const removeDupSales = () => {
+    showConfirm('Tekrarları Temizle', 'Aynı ID\'li tekrarlanan satış kayıtları silinecek. Devam edilsin mi?', () => {
+      save(prev => {
+        const seen = new Set<string>();
+        return { ...prev, sales: prev.sales.filter(s => { if (seen.has(s.id)) return false; seen.add(s.id); return true; }) };
+      });
+      showToast('Tekrarlanan satışlar temizlendi!');
+      diagnose();
+    });
+  };
+
+  const mergeduplicateCari = () => {
+    const nameCounts: Record<string, string[]> = {};
+    db.cari.forEach(c => { const n = c.name.trim().toLowerCase(); if (!nameCounts[n]) nameCounts[n] = []; nameCounts[n].push(c.id); });
+    const dups = Object.entries(nameCounts).filter(([, ids]) => ids.length > 1);
+    if (dups.length === 0) { showToast('Tekrarlanan cari bulunamadı!'); return; }
+    showConfirm('Cari Birleştir', `${dups.length} isimde tekrar var. Her grup için ilk kaydı koruyup diğerleri silinecek. Devam?`, () => {
+      save(prev => {
+        const toRemove = new Set<string>();
+        dups.forEach(([, ids]) => ids.slice(1).forEach(id => toRemove.add(id)));
+        return { ...prev, cari: prev.cari.filter(c => !toRemove.has(c.id)) };
+      });
+      showToast(`${dups.length} grup birleştirildi!`);
+      diagnose();
+    }, true);
+  };
+
+  return (
+    <div style={{ display: 'grid', gap: 14 }}>
+      <Card title="🔧 Veri Tutarlılık Kontrolü">
+        <p style={{ color: '#64748b', fontSize: '0.85rem', marginBottom: 16, lineHeight: 1.6 }}>
+          Veritabanınızı analiz ederek tutarsız, eksik veya hatalı kayıtları tespit edin.
+        </p>
+        <button onClick={diagnose} style={{ width: '100%', padding: '13px 0', background: 'linear-gradient(135deg,#3b82f6,#2563eb)', border: 'none', borderRadius: 12, color: '#fff', fontWeight: 800, cursor: 'pointer', fontSize: '0.95rem', marginBottom: 14 }}>
+          🔍 Veriyi Analiz Et
+        </button>
+        {results.length > 0 && (
+          <div style={{ display: 'grid', gap: 6 }}>
+            {results.map((r, i) => (
+              <div key={i} style={{ padding: '10px 14px', background: r.startsWith('✅') ? 'rgba(16,185,129,0.08)' : r.startsWith('📊') ? 'rgba(59,130,246,0.08)' : 'rgba(245,158,11,0.08)', border: `1px solid ${r.startsWith('✅') ? 'rgba(16,185,129,0.2)' : r.startsWith('📊') ? 'rgba(59,130,246,0.2)' : 'rgba(245,158,11,0.2)'}`, borderRadius: 9, color: '#e2e8f0', fontSize: '0.85rem' }}>
+                {r}
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      <Card title="🛠️ Onarım Araçları">
+        <p style={{ color: '#64748b', fontSize: '0.88rem', marginBottom: 16, lineHeight: 1.6 }}>
+          Tespit edilen sorunları otomatik düzeltmek için aşağıdaki araçları kullanın. Her işlem onay ister.
+        </p>
+        <div style={{ display: 'grid', gap: 10 }}>
+          {[
+            { label: '📦 Negatif Stokları Sıfırla', desc: 'Stok değeri 0\'ın altına düşmüş ürünleri sıfıra çeker', action: fixNegativeStock, color: '#f59e0b' },
+            { label: '🔗 Orphan Kasa Bağlantılarını Temizle', desc: 'Silinmiş cariye bağlı kasa kayıtlarındaki bağlantıyı kaldırır', action: fixOrphanKasa, color: '#3b82f6' },
+            { label: '⚖️ Cari Bakiyeleri Yeniden Hesapla', desc: 'Tüm bakiyeleri kasa işlemlerine göre baştan hesaplar', action: recalcCariBalance, color: '#8b5cf6' },
+            { label: '🗑️ Tekrarlayan Satış Kayıtlarını Temizle', desc: 'Aynı ID ile çift kaydedilmiş satışları siler', action: removeDupSales, color: '#10b981' },
+            { label: '🤝 Aynı İsimli Cari Hesapları Birleştir', desc: 'Aynı isimde birden fazla cari varsa tek kayıt bırakır', action: mergeduplicateCari, color: '#ef4444' },
+          ].map(t => (
+            <div key={t.label} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'rgba(0,0,0,0.2)', borderRadius: 10, border: `1px solid ${t.color}15` }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, color: '#f1f5f9', fontSize: '0.88rem' }}>{t.label}</div>
+                <div style={{ color: '#475569', fontSize: '0.78rem', marginTop: 2 }}>{t.desc}</div>
+              </div>
+              <button onClick={t.action} style={{ background: `${t.color}15`, border: `1px solid ${t.color}30`, borderRadius: 8, color: t.color, padding: '7px 14px', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                Uygula
+              </button>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <Card title="📋 Sistem Bilgileri">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          {[
+            { label: 'Toplam Kayıt', value: `${[db.products, db.sales, db.cari, db.kasa, db.invoices || [], db.budgets || []].reduce((s, a) => s + a.length, 0)} kayıt` },
+            { label: 'localStorage Boyutu', value: `${Math.round(new Blob([localStorage.getItem('sobaYonetim') || '']).size / 1024)} KB` },
+            { label: 'Uygulama Versiyonu', value: `v${db._version || 1}` },
+            { label: 'Son Veri Güncellemesi', value: db.kasa.length > 0 ? new Date(Math.max(...db.kasa.map(k => new Date(k.updatedAt || k.createdAt).getTime()))).toLocaleDateString('tr-TR') : '-' },
+          ].map(s => (
+            <div key={s.label} style={{ background: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: '10px 14px' }}>
+              <div style={{ color: '#475569', fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>{s.label}</div>
+              <div style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.9rem' }}>{s.value}</div>
+            </div>
+          ))}
+        </div>
+      </Card>
     </div>
   );
 }
