@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef } from 'react';
+import * as XLSX from 'xlsx';
 import { Modal } from '@/components/Modal';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
@@ -121,15 +122,22 @@ export default function Butce({ db, save }: Props) {
     return entries;
   };
 
+  const parseXLSX = (buf: ArrayBuffer): string => {
+    const wb = XLSX.read(buf, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    return rows.map(row => (row as unknown[]).map(cell => String(cell ?? '')).join(';')).join('\n');
+  };
+
   const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const text = ev.target?.result as string;
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    const isXLSX = ext === 'xlsx' || ext === 'xls';
+
+    const processText = (text: string) => {
       const entries = parseBankCSV(text);
-      if (entries.length === 0) { showToast('Uyumlu veri bulunamadı. CSV formatını kontrol edin!', 'error'); return; }
-      const nowIso = new Date().toISOString();
+      if (entries.length === 0) { showToast('Uyumlu veri bulunamadı. Dosya formatını kontrol edin!', 'error'); return; }
       let matched = 0;
       entries.forEach(e => {
         const cat = budgets.find(b => b.kasaCategories.some(kc => e.desc.toLowerCase().includes(kc.toLowerCase())));
@@ -137,7 +145,23 @@ export default function Butce({ db, save }: Props) {
       });
       setImportResult({ total: entries.length, matched, entries });
     };
-    reader.readAsText(file, 'utf-8');
+
+    if (isXLSX) {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        try {
+          const text = parseXLSX(ev.target?.result as ArrayBuffer);
+          processText(text);
+        } catch {
+          showToast('Excel dosyası okunamadı. Farklı bir format deneyin.', 'error');
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = ev => processText(ev.target?.result as string);
+      reader.readAsText(file, 'utf-8');
+    }
     if (fileRef.current) fileRef.current.value = '';
   };
 
@@ -271,19 +295,23 @@ export default function Butce({ db, save }: Props) {
       {/* Bank Statement Modal */}
       <Modal open={bankModal} onClose={() => { setBankModal(false); setImportResult(null); }} title="🏦 Banka Ekstresi İçe Aktar" maxWidth={560}>
         <div style={{ display: 'grid', gap: 14 }}>
-          <div style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 10, padding: '12px 16px', color: '#93c5fd', fontSize: '0.82rem', lineHeight: 1.6 }}>
-            <strong>Desteklenen Format:</strong> CSV veya TXT dosyası (banka uygulamasından export)<br />
-            Her satırda: <strong>Tarih, Açıklama, Tutar</strong> (virgül, noktalı virgül veya tab ile ayrılmış)<br />
-            <br />
-            <em>İpucu: Türkçe bankalar genellikle "Hesap Ekstresi.csv" olarak dışa aktarır.</em>
+          <div style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 10, padding: '12px 16px', color: '#93c5fd', fontSize: '0.82rem', lineHeight: 1.7 }}>
+            <strong>Desteklenen Formatlar:</strong>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '7px 0' }}>
+              {[['📊', 'XLSX', '#10b981'], ['📗', 'XLS', '#10b981'], ['📄', 'CSV', '#3b82f6'], ['📝', 'TXT', '#64748b']].map(([icon, fmt, color]) => (
+                <span key={fmt} style={{ background: `${color}15`, border: `1px solid ${color}30`, borderRadius: 6, padding: '2px 9px', fontSize: '0.78rem', fontWeight: 700, color }}>{icon} {fmt}</span>
+              ))}
+            </div>
+            Her satırda: <strong>Tarih, Açıklama, Tutar</strong> (virgül / noktalı virgül / tab ayrımlı veya Excel sütunları)<br />
+            <em style={{ color: '#64748b' }}>İpucu: Excel'den "Farklı Kaydet → CSV" veya doğrudan .xlsx yükleyebilirsiniz.</em>
           </div>
           {!importResult ? (
             <>
-              <input ref={fileRef} type="file" accept=".csv,.txt,.xls" onChange={handleFileImport} style={{ display: 'none' }} />
+              <input ref={fileRef} type="file" accept=".csv,.txt,.xls,.xlsx" onChange={handleFileImport} style={{ display: 'none' }} />
               <button onClick={() => fileRef.current?.click()} style={{ padding: '40px 0', background: 'rgba(59,130,246,0.06)', border: '2px dashed rgba(59,130,246,0.3)', borderRadius: 12, color: '#60a5fa', cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem', transition: 'all 0.2s' }}
                 onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(59,130,246,0.6)'}
                 onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(59,130,246,0.3)'}>
-                📂 CSV / TXT Dosyası Seç
+                📂 XLSX / CSV / TXT Dosyası Seç
               </button>
             </>
           ) : (
