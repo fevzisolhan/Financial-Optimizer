@@ -16,6 +16,7 @@ import Pelet from '@/pages/Pelet';
 import BoruTed from '@/pages/BoruTed';
 import Partners from '@/pages/Partners';
 import Settings from '@/pages/Settings';
+import AIAsistan from '@/pages/AIAsistan';
 import { formatMoney, genId } from '@/lib/utils-tr';
 import { Modal } from '@/components/Modal';
 
@@ -32,6 +33,7 @@ const TABS = [
   { id: 'reports', label: 'Raporlar', icon: '📈', group: 'Analiz' },
   { id: 'stock', label: 'Stok', icon: '🔢', group: 'Analiz' },
   { id: 'monitor', label: 'İzleme', icon: '🔔', group: 'Analiz' },
+  { id: 'ai', label: 'AI Asistan', icon: '🤖', group: 'Analiz' },
   { id: 'partners', label: 'Ortaklar', icon: '🤝', group: 'Sistem' },
   { id: 'settings', label: 'Ayarlar', icon: '⚙️', group: 'Sistem' },
 ] as const;
@@ -392,6 +394,7 @@ function AppContent() {
           {activeTab === 'reports' && <Reports db={db} />}
           {activeTab === 'stock' && <Stock db={db} save={save} />}
           {activeTab === 'monitor' && <Monitor db={db} save={save} />}
+          {activeTab === 'ai' && <AIAsistan db={db} />}
           {activeTab === 'partners' && <Partners db={db} save={save} />}
           {activeTab === 'settings' && <Settings db={db} save={save} exportJSON={exportJSON} importJSON={importJSON} />}
         </main>
