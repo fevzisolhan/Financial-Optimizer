@@ -280,6 +280,36 @@ export interface PelletSettings {
   critDays: number;
 }
 
+export interface InvoiceItem {
+  productId?: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  vatRate: number;
+  total: number;
+}
+
+export interface Invoice {
+  id: string;
+  invoiceNo: string;
+  type: 'satis' | 'alis';
+  cariId?: string;
+  cariName: string;
+  cariTaxNo?: string;
+  cariAddress?: string;
+  items: InvoiceItem[];
+  subtotal: number;
+  vatTotal: number;
+  discount: number;
+  total: number;
+  payment: 'nakit' | 'kart' | 'havale' | 'cari' | 'cek';
+  status: 'taslak' | 'onaylandi' | 'iptal' | 'odendi';
+  dueDate?: string;
+  note?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface DB {
   _version: number;
   products: Product[];
@@ -306,6 +336,7 @@ export interface DB {
     pelletSettings?: PelletSettings;
   };
   pelletSettings: PelletSettings;
+  invoices: Invoice[];
   ortakEmanetler: unknown[];
   installments: unknown[];
 }

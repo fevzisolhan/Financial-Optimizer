@@ -107,14 +107,14 @@ export default function Dashboard({ db, onTabChange }: Props) {
   return (
     <div style={{ animation: 'fadeIn 0.3s ease' }}>
       {/* STAT CARDS */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 14, marginBottom: 20 }}>
         <StatCard icon="💰" label="Bugün Ciro" value={formatMoney(stats.todayRevenue)} color="#10b981" gradient="rgba(16,185,129,0.12) 0%, rgba(16,185,129,0.04) 100%" sub={`${stats.todaySalesCount} satış`} onClick={() => onTabChange('sales')} trend={stats.revTrend} />
         <StatCard icon="📈" label="Bugün Kâr" value={formatMoney(stats.todayProfit)} color="#3b82f6" gradient="rgba(59,130,246,0.12) 0%, rgba(59,130,246,0.04) 100%" sub={`${stats.todayRevenue > 0 ? ((stats.todayProfit / stats.todayRevenue) * 100).toFixed(1) : 0}% marj`} />
         <StatCard icon="📅" label="Bu Ay Ciro" value={formatMoney(stats.monthRevenue)} color="#8b5cf6" gradient="rgba(139,92,246,0.12) 0%, rgba(139,92,246,0.04) 100%" sub={`Kâr: ${formatMoney(stats.monthProfit)}`} />
         <StatCard icon="📦" label="Stok Değeri" value={formatMoney(stats.stokDeger)} color="#f59e0b" gradient="rgba(245,158,11,0.12) 0%, rgba(245,158,11,0.04) 100%" onClick={() => onTabChange('stock')} sub={`${db.products.length} ürün`} />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 14, marginBottom: 24 }}>
         <StatCard icon="💵" label="Nakit Kasa" value={formatMoney(stats.nakit)} color="#06b6d4" gradient="rgba(6,182,212,0.12) 0%, rgba(6,182,212,0.04) 100%" onClick={() => onTabChange('kasa')} />
         <StatCard icon="🏦" label="Banka" value={formatMoney(stats.banka)} color="#6366f1" gradient="rgba(99,102,241,0.12) 0%, rgba(99,102,241,0.04) 100%" onClick={() => onTabChange('kasa')} />
         <StatCard icon="📋" label="Alacak" value={formatMoney(stats.totalReceivable)} color="#ff5722" gradient="rgba(255,87,34,0.12) 0%, rgba(255,87,34,0.04) 100%" onClick={() => onTabChange('cari')} />
@@ -136,7 +136,7 @@ export default function Dashboard({ db, onTabChange }: Props) {
       </div>
 
       {/* CHARTS */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 18, marginBottom: 18 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 18, marginBottom: 18 }}>
         <div style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)', borderRadius: 18, padding: '22px 22px 14px', border: '1px solid rgba(255,255,255,0.07)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 }}>
             <div>
@@ -186,7 +186,7 @@ export default function Dashboard({ db, onTabChange }: Props) {
       <Oneriler db={db} onTabChange={onTabChange} />
 
       {/* BOTTOM ROW */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 18 }}>
         {/* Recent Sales */}
         <div style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)', borderRadius: 18, border: '1px solid rgba(255,255,255,0.07)', overflow: 'hidden' }}>
           <div style={{ padding: '18px 20px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

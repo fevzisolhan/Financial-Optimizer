@@ -2,7 +2,7 @@
 
 ## Overview
 
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+pnpm workspace monorepo using TypeScript. Contains a Turkish stove/heater store management system (Soba Yönetim Sistemi) — a full "Kolay Ön Muhasebe Programı" with Fatura Takibi, Cari, Stok, Gelir/Gider, Nakit Yönetimi, AI Asistan, Entegrasyonlar, and mobile responsiveness. All business data is stored in localStorage. Turkish UI with dark navy theme (#070e1c) and orange (#FF5722) accent.
 
 ## Stack
 
@@ -10,8 +10,11 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **Node.js version**: 24
 - **Package manager**: pnpm
 - **TypeScript version**: 5.9
-- **API framework**: Express 5
-- **Database**: PostgreSQL + Drizzle ORM
+- **Frontend**: React + Vite (artifacts/soba-yonetim)
+- **Charts**: recharts v2.15.2
+- **API framework**: Express 5 (artifacts/api-server, port 8080)
+- **AI**: OpenAI GPT-5 Mini via Replit AI Integrations proxy
+- **Database**: PostgreSQL + Drizzle ORM (for API server; frontend uses localStorage)
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)

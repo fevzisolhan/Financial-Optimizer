@@ -17,6 +17,8 @@ import BoruTed from '@/pages/BoruTed';
 import Partners from '@/pages/Partners';
 import Settings from '@/pages/Settings';
 import AIAsistan from '@/pages/AIAsistan';
+import Fatura from '@/pages/Fatura';
+import Entegrasyonlar from '@/pages/Entegrasyonlar';
 import { formatMoney, genId } from '@/lib/utils-tr';
 import { Modal } from '@/components/Modal';
 
@@ -24,6 +26,7 @@ const TABS = [
   { id: 'dashboard', label: 'Özet', icon: '📊', group: 'Ana' },
   { id: 'products', label: 'Ürünler', icon: '📦', group: 'Ana' },
   { id: 'sales', label: 'Satış', icon: '🛒', group: 'Ana' },
+  { id: 'fatura', label: 'Fatura', icon: '🧾', group: 'Ana' },
   { id: 'suppliers', label: 'Tedarikçi', icon: '🏭', group: 'Tedarik' },
   { id: 'pelet', label: 'Pelet', icon: '🪵', group: 'Tedarik' },
   { id: 'boruTed', label: 'Boru Ted.', icon: '🔩', group: 'Tedarik' },
@@ -34,6 +37,7 @@ const TABS = [
   { id: 'stock', label: 'Stok', icon: '🔢', group: 'Analiz' },
   { id: 'monitor', label: 'İzleme', icon: '🔔', group: 'Analiz' },
   { id: 'ai', label: 'AI Asistan', icon: '🤖', group: 'Analiz' },
+  { id: 'entegrasyon', label: 'Entegrasyon', icon: '🔗', group: 'Sistem' },
   { id: 'partners', label: 'Ortaklar', icon: '🤝', group: 'Sistem' },
   { id: 'settings', label: 'Ayarlar', icon: '⚙️', group: 'Sistem' },
 ] as const;
@@ -273,8 +277,16 @@ function FAB({ db, save }: { db: ReturnType<typeof useDB>['db']; save: ReturnTyp
 function AppContent() {
   const { db, save, exportJSON, importJSON } = useDB();
   const [activeTab, setActiveTab] = useState<TabId>('dashboard');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
-  const navigate = useCallback((tab: TabId) => setActiveTab(tab), []);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  const navigate = useCallback((tab: TabId) => { setActiveTab(tab); setSidebarOpen(false); }, []);
 
   const badges = useMemo(() => ({
     products: db.products.filter(p => p.stock === 0).length + db.products.filter(p => p.stock > 0 && p.stock <= p.minStock).length,
@@ -306,15 +318,18 @@ function AppContent() {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#070e1c', color: '#f1f5f9', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif" }}>
+      {/* Mobile overlay */}
+      {isMobile && sidebarOpen && <div onClick={() => setSidebarOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 99, backdropFilter: 'blur(4px)' }} />}
       {/* SIDEBAR */}
-      <aside style={{ width: 228, minHeight: '100vh', background: 'linear-gradient(180deg, #06101f 0%, #080f1e 100%)', borderRight: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', position: 'fixed', left: 0, top: 0, bottom: 0, zIndex: 100 }}>
+      <aside style={{ width: 228, minHeight: '100vh', background: 'linear-gradient(180deg, #06101f 0%, #080f1e 100%)', borderRight: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', position: 'fixed', left: isMobile && !sidebarOpen ? -240 : 0, top: 0, bottom: 0, zIndex: 100, transition: 'left 0.25s ease' }}>
         <div style={{ padding: '18px 16px 14px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
             <div style={{ width: 38, height: 38, background: 'linear-gradient(135deg, #ff5722, #ff8c42)', borderRadius: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', boxShadow: '0 4px 16px rgba(255,87,34,0.35)', flexShrink: 0 }}>🔥</div>
-            <div>
+            <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 800, color: '#f1f5f9', fontSize: '0.92rem', letterSpacing: '-0.01em' }}>Soba Yönetim</div>
               <div style={{ color: '#1e3a5f', fontSize: '0.65rem', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Sistemi v2.0</div>
             </div>
+            {isMobile && <button onClick={() => setSidebarOpen(false)} style={{ background: 'none', border: 'none', color: '#475569', fontSize: '1.4rem', cursor: 'pointer', padding: '4px 8px' }}>✕</button>}
           </div>
         </div>
 
@@ -357,34 +372,39 @@ function AppContent() {
       </aside>
 
       {/* MAIN */}
-      <div style={{ flex: 1, marginLeft: 228, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <div style={{ flex: 1, marginLeft: isMobile ? 0 : 228, display: 'flex', flexDirection: 'column', minHeight: '100vh', transition: 'margin-left 0.25s ease' }}>
         {/* HEADER */}
-        <header style={{ background: 'rgba(6,16,31,0.97)', borderBottom: '1px solid rgba(255,255,255,0.05)', padding: '11px 24px', display: 'flex', alignItems: 'center', gap: 14, position: 'sticky', top: 0, zIndex: 90, backdropFilter: 'blur(12px)' }}>
-          <div style={{ minWidth: 130 }}>
-            <h1 style={{ fontWeight: 800, fontSize: '1.02rem', color: '#f1f5f9', margin: 0, letterSpacing: '-0.01em' }}>{TABS.find(t => t.id === activeTab)?.icon} {TABS.find(t => t.id === activeTab)?.label}</h1>
+        <header style={{ background: 'rgba(6,16,31,0.97)', borderBottom: '1px solid rgba(255,255,255,0.05)', padding: isMobile ? '10px 14px' : '11px 24px', display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 14, position: 'sticky', top: 0, zIndex: 90, backdropFilter: 'blur(12px)' }}>
+          {isMobile && (
+            <button onClick={() => setSidebarOpen(o => !o)} style={{ background: 'rgba(255,255,255,0.06)', border: 'none', borderRadius: 8, color: '#f1f5f9', padding: '8px 10px', cursor: 'pointer', fontSize: '1.1rem', flexShrink: 0 }}>☰</button>
+          )}
+          <div style={{ minWidth: isMobile ? 0 : 130, flex: isMobile ? 1 : undefined }}>
+            <h1 style={{ fontWeight: 800, fontSize: isMobile ? '0.9rem' : '1.02rem', color: '#f1f5f9', margin: 0, letterSpacing: '-0.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{TABS.find(t => t.id === activeTab)?.icon} {TABS.find(t => t.id === activeTab)?.label}</h1>
           </div>
-          <GlobalSearch onNavigate={navigate} db={db} />
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-            {/* Kısayollar */}
-            <div style={{ display: 'flex', gap: 4 }}>
-              {[{ k: '⌘1', t: 'dashboard', label: 'Özet' }, { k: '⌘2', t: 'products', label: 'Ürün' }, { k: '⌘3', t: 'sales', label: 'Satış' }, { k: '⌘4', t: 'kasa', label: 'Kasa' }].map(s => (
-                <button key={s.k} onClick={() => navigate(s.t as TabId)} title={`${s.label} (Ctrl+${s.k.replace('⌘', '')})`} style={{ background: activeTab === s.t ? 'rgba(255,87,34,0.15)' : 'rgba(255,255,255,0.04)', border: `1px solid ${activeTab === s.t ? 'rgba(255,87,34,0.25)' : 'rgba(255,255,255,0.06)'}`, borderRadius: 6, color: activeTab === s.t ? '#ff7043' : '#334155', padding: '4px 8px', cursor: 'pointer', fontSize: '0.68rem', fontWeight: 700, transition: 'all 0.15s' }}>
-                  {s.k}
-                </button>
-              ))}
-            </div>
+          {!isMobile && <GlobalSearch onNavigate={navigate} db={db} />}
+          <div style={{ display: 'flex', gap: isMobile ? 4 : 8, alignItems: 'center', flexShrink: 0 }}>
+            {!isMobile && (
+              <div style={{ display: 'flex', gap: 4 }}>
+                {[{ k: '⌘1', t: 'dashboard', label: 'Özet' }, { k: '⌘2', t: 'products', label: 'Ürün' }, { k: '⌘3', t: 'sales', label: 'Satış' }, { k: '⌘4', t: 'kasa', label: 'Kasa' }].map(s => (
+                  <button key={s.k} onClick={() => navigate(s.t as TabId)} title={`${s.label} (Ctrl+${s.k.replace('⌘', '')})`} style={{ background: activeTab === s.t ? 'rgba(255,87,34,0.15)' : 'rgba(255,255,255,0.04)', border: `1px solid ${activeTab === s.t ? 'rgba(255,87,34,0.25)' : 'rgba(255,255,255,0.06)'}`, borderRadius: 6, color: activeTab === s.t ? '#ff7043' : '#334155', padding: '4px 8px', cursor: 'pointer', fontSize: '0.68rem', fontWeight: 700, transition: 'all 0.15s' }}>
+                    {s.k}
+                  </button>
+                ))}
+              </div>
+            )}
             {badges.monitor > 0 && <button onClick={() => navigate('monitor')} style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, color: '#f87171', padding: '5px 11px', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 700 }}>🔔 {badges.monitor}</button>}
-            {badges.products > 0 && <button onClick={() => navigate('products')} style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: 8, color: '#fca5a5', padding: '5px 11px', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600 }}>📦 {badges.products}</button>}
-            <button onClick={exportJSON} title="Hızlı Yedek Al" style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 8, color: '#60a5fa', padding: '5px 11px', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 700 }}>💾 Yedek</button>
-            <div style={{ color: '#1e3a5f', fontSize: '0.75rem', fontWeight: 500, whiteSpace: 'nowrap' }}>{new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+            {!isMobile && badges.products > 0 && <button onClick={() => navigate('products')} style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: 8, color: '#fca5a5', padding: '5px 11px', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600 }}>📦 {badges.products}</button>}
+            <button onClick={exportJSON} title="Hızlı Yedek Al" style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 8, color: '#60a5fa', padding: '5px 11px', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 700 }}>{isMobile ? '💾' : '💾 Yedek'}</button>
+            {!isMobile && <div style={{ color: '#1e3a5f', fontSize: '0.75rem', fontWeight: 500, whiteSpace: 'nowrap' }}>{new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' })}</div>}
           </div>
         </header>
 
         {/* CONTENT */}
-        <main style={{ flex: 1, padding: '22px 24px', boxSizing: 'border-box' }}>
+        <main style={{ flex: 1, padding: isMobile ? '14px 10px' : '22px 24px', boxSizing: 'border-box', overflowX: 'hidden' }}>
           {activeTab === 'dashboard' && <Dashboard db={db} onTabChange={navigate} />}
           {activeTab === 'products' && <Products db={db} save={save} />}
           {activeTab === 'sales' && <Sales db={db} save={save} />}
+          {activeTab === 'fatura' && <Fatura db={db} save={save} />}
           {activeTab === 'suppliers' && <Suppliers db={db} save={save} />}
           {activeTab === 'pelet' && <Pelet db={db} save={save} />}
           {activeTab === 'boruTed' && <BoruTed db={db} save={save} />}
@@ -395,6 +415,7 @@ function AppContent() {
           {activeTab === 'stock' && <Stock db={db} save={save} />}
           {activeTab === 'monitor' && <Monitor db={db} save={save} />}
           {activeTab === 'ai' && <AIAsistan db={db} />}
+          {activeTab === 'entegrasyon' && <Entegrasyonlar db={db} />}
           {activeTab === 'partners' && <Partners db={db} save={save} />}
           {activeTab === 'settings' && <Settings db={db} save={save} exportJSON={exportJSON} importJSON={importJSON} />}
         </main>
@@ -417,6 +438,13 @@ function AppContent() {
         tr:hover td { background: rgba(255,255,255,0.02) !important; transition: background 0.15s; }
         button:active { transform: scale(0.97) !important; }
         nav::-webkit-scrollbar { width: 0; }
+        @media (max-width: 768px) {
+          table { display: block; overflow-x: auto; }
+          .stat-grid { grid-template-columns: 1fr 1fr !important; }
+        }
+        @media (max-width: 480px) {
+          .stat-grid { grid-template-columns: 1fr !important; }
+        }
       `}</style>
     </div>
   );
