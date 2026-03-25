@@ -3,6 +3,7 @@ import { useDB } from '@/hooks/useDB';
 import { useToast } from '@/components/Toast';
 import { ConfirmProvider } from '@/components/ConfirmDialog';
 import { Toaster } from 'sonner';
+import LoginScreen, { useAuth } from '@/components/LoginScreen';
 import Dashboard from '@/pages/Dashboard';
 import Products from '@/pages/Products';
 import Sales from '@/pages/Sales';
@@ -455,6 +456,12 @@ function AppContent() {
 }
 
 export default function App() {
+  const { authed, login } = useAuth();
+
+  if (!authed) {
+    return <LoginScreen onLogin={login} />;
+  }
+
   return (
     <ConfirmProvider>
       <AppContent />

@@ -130,6 +130,29 @@ function playNotificationYogun(ctx: AudioContext, vol: number) {
   playTone(ctx, 1000, 0.12, vol * 0.5, 'triangle', 0.2);
 }
 
+function speak(text: string, volume: number) {
+  if (!('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = 'tr-TR';
+  utter.rate = 1.05;
+  utter.pitch = 1.0;
+  utter.volume = Math.min(1, volume * 1.5);
+  const voices = window.speechSynthesis.getVoices();
+  const trVoice = voices.find(v => v.lang.startsWith('tr'));
+  if (trVoice) utter.voice = trVoice;
+  window.speechSynthesis.speak(utter);
+}
+
+function loadSpeechEnabled(): boolean {
+  try {
+    const raw = localStorage.getItem('sobaYonetim');
+    if (!raw) return true;
+    const parsed = JSON.parse(raw);
+    return parsed.soundSettings?.speechEnabled !== false;
+  } catch { return true; }
+}
+
 export function useSoundFeedback() {
   const ctxRef = useRef<AudioContext | null>(null);
 
@@ -190,5 +213,19 @@ export function useSoundFeedback() {
     }).catch(() => {});
   }, [getCtx]);
 
-  return { playSound };
+  const speakMessage = useCallback((message: string) => {
+    const settings = loadSoundSettings();
+    if (!settings.enabled) return;
+    if (!loadSpeechEnabled()) return;
+    speak(message, settings.volume);
+  }, []);
+
+  const playSoundWithSpeech = useCallback((type: SoundType, message?: string) => {
+    playSound(type);
+    if (message) {
+      setTimeout(() => speakMessage(message), 300);
+    }
+  }, [playSound, speakMessage]);
+
+  return { playSound, speakMessage, playSoundWithSpeech };
 }

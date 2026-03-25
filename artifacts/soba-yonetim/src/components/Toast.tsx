@@ -9,11 +9,25 @@ const soundTypeMap: Record<string, SoundType> = {
   info: 'notification',
 };
 
+const SPEECH_TYPES = new Set(['error', 'warning']);
+
+function cleanForSpeech(msg: string): string {
+  return msg.replace(/[✅❌⚠️🔔📦💰🛒🧾📊🔥🗑️✨💾🔒]/gu, '').trim();
+}
+
 export function useToast() {
-  const { playSound } = useSoundFeedback();
+  const { playSound, speakMessage } = useSoundFeedback();
 
   const showToast = (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'success') => {
     playSound(soundTypeMap[type]);
+
+    if (SPEECH_TYPES.has(type)) {
+      const cleaned = cleanForSpeech(message);
+      if (cleaned) {
+        setTimeout(() => speakMessage(cleaned), 400);
+      }
+    }
+
     if (type === 'success') toast.success(message);
     else if (type === 'error') toast.error(message);
     else if (type === 'warning') toast.warning(message);

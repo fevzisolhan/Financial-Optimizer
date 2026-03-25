@@ -301,6 +301,50 @@ function SoundSettings({ playSound }: { playSound: (type: SoundType) => void }) 
         </div>
       </Card>
 
+      <Card title="🗣️ Sesli Konuşma (TTS)">
+        <div style={{ display: 'grid', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontWeight: 700, color: '#f1f5f9', fontSize: '0.95rem' }}>Sesli Bildirim</div>
+              <div style={{ color: '#64748b', fontSize: '0.82rem', marginTop: 2 }}>Hata ve uyarılarda sesli konuşma</div>
+            </div>
+            <button
+              onClick={() => {
+                const key = 'sobaYonetim';
+                const raw = localStorage.getItem(key);
+                const data = raw ? JSON.parse(raw) : {};
+                const current = data.soundSettings?.speechEnabled !== false;
+                data.soundSettings = { ...(data.soundSettings || {}), speechEnabled: !current };
+                localStorage.setItem(key, JSON.stringify(data));
+                setSettings(s => ({ ...s }));
+                if (!current && 'speechSynthesis' in window) {
+                  const u = new SpeechSynthesisUtterance('Sesli bildirim aktif edildi');
+                  u.lang = 'tr-TR';
+                  u.rate = 1.05;
+                  window.speechSynthesis.speak(u);
+                }
+              }}
+              style={{ width: 52, height: 28, borderRadius: 14, border: 'none', cursor: 'pointer', position: 'relative', background: (() => { try { const d = JSON.parse(localStorage.getItem('sobaYonetim') || '{}'); return d.soundSettings?.speechEnabled !== false ? '#10b981' : '#334155'; } catch { return '#10b981'; } })(), transition: 'background 0.2s' }}
+            >
+              <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', position: 'absolute', top: 4, left: (() => { try { const d = JSON.parse(localStorage.getItem('sobaYonetim') || '{}'); return d.soundSettings?.speechEnabled !== false ? 28 : 4; } catch { return 28; } })(), transition: 'left 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }} />
+            </button>
+          </div>
+          <button
+            onClick={() => {
+              if ('speechSynthesis' in window) {
+                const u = new SpeechSynthesisUtterance('Merhaba! Bu bir test konuşmasıdır. Önemli bildirimlerde sesli uyarı alacaksınız.');
+                u.lang = 'tr-TR';
+                u.rate = 1.05;
+                window.speechSynthesis.speak(u);
+              }
+            }}
+            style={{ padding: '10px 14px', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, cursor: 'pointer', background: 'rgba(0,0,0,0.3)', color: '#94a3b8', fontWeight: 600, fontSize: '0.85rem' }}
+          >
+            🗣️ Test Konuşma
+          </button>
+        </div>
+      </Card>
+
       <Card title="🎧 Sesleri Dinle">
         <p style={{ color: '#64748b', fontSize: '0.85rem', marginBottom: 14 }}>Her ses tipini aşağıdan test edebilirsiniz.</p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
