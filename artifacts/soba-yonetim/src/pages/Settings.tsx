@@ -2,14 +2,21 @@ import { useState, useRef } from 'react';
 import ExcelImport from '@/pages/ExcelImport';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
+import { useSoundFeedback } from '@/hooks/useSoundFeedback';
+import type { SoundSettings, SoundTheme, SoundType } from '@/hooks/useSoundFeedback';
+import { exportToExcel } from '@/lib/excelExport';
 import type { DB } from '@/types';
+import { formatDate } from '@/lib/utils-tr';
 
 interface Props { db: DB; save: (fn: (prev: DB) => DB) => void; exportJSON: () => void; importJSON: (f: File) => Promise<boolean>; }
 
 const TABS_LIST = [
   { id: 'company', icon: '🏢', label: 'Şirket' },
   { id: 'pellet', icon: '🪵', label: 'Pelet' },
+  { id: 'sound', icon: '🔊', label: 'Ses' },
   { id: 'backup', icon: '💾', label: 'Yedek & Geri Yükleme' },
+  { id: 'excel_export', icon: '📊', label: 'Excel Çıktı' },
+  { id: 'activity', icon: '📋', label: 'Aktivite' },
   { id: 'shortcuts', icon: '⌨️', label: 'Kısayollar' },
   { id: 'repair', icon: '🔧', label: 'Veri Onarım' },
   { id: 'excel', icon: '📥', label: 'Excel İçe Aktar' },
@@ -18,9 +25,30 @@ const TABS_LIST = [
 
 type Tab = typeof TABS_LIST[number]['id'];
 
+function loadSoundSettings(): SoundSettings {
+  try {
+    const raw = localStorage.getItem('sobaYonetim');
+    if (!raw) return { enabled: true, volume: 0.5, theme: 'standart' };
+    const parsed = JSON.parse(raw);
+    return { enabled: true, volume: 0.5, theme: 'standart', ...(parsed.soundSettings || {}) };
+  } catch {
+    return { enabled: true, volume: 0.5, theme: 'standart' };
+  }
+}
+
+function saveSoundSettingsToStorage(settings: SoundSettings) {
+  try {
+    const raw = localStorage.getItem('sobaYonetim');
+    const parsed = raw ? JSON.parse(raw) : {};
+    parsed.soundSettings = settings;
+    localStorage.setItem('sobaYonetim', JSON.stringify(parsed));
+  } catch {}
+}
+
 export default function Settings({ db, save, exportJSON, importJSON }: Props) {
   const { showToast } = useToast();
   const { showConfirm } = useConfirm();
+  const { playSound } = useSoundFeedback();
   const [company, setCompany] = useState({ ...db.company });
   const [pellet, setPellet] = useState({ ...db.pelletSettings });
   const [tab, setTab] = useState<Tab>('company');
@@ -80,7 +108,6 @@ export default function Settings({ db, save, exportJSON, importJSON }: Props) {
 
   return (
     <div style={{ maxWidth: 720 }}>
-      {/* Tab Bar */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 24, flexWrap: 'wrap', background: 'rgba(0,0,0,0.2)', borderRadius: 12, padding: 6, width: 'fit-content' }}>
         {TABS_LIST.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{ padding: '8px 16px', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem', background: tab === t.id ? 'linear-gradient(135deg, #ff5722, #ff7043)' : 'transparent', color: tab === t.id ? '#fff' : '#64748b', boxShadow: tab === t.id ? '0 4px 12px rgba(255,87,34,0.3)' : 'none', transition: 'all 0.15s' }}>
@@ -89,7 +116,6 @@ export default function Settings({ db, save, exportJSON, importJSON }: Props) {
         ))}
       </div>
 
-      {/* Şirket Bilgileri */}
       {tab === 'company' && (
         <Card title="🏢 Şirket Bilgileri">
           <div style={{ display: 'grid', gap: 14 }}>
@@ -105,7 +131,6 @@ export default function Settings({ db, save, exportJSON, importJSON }: Props) {
         </Card>
       )}
 
-      {/* Pelet Ayarları */}
       {tab === 'pellet' && (
         <Card title="🪵 Pelet Ayarları">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
@@ -121,12 +146,14 @@ export default function Settings({ db, save, exportJSON, importJSON }: Props) {
         </Card>
       )}
 
-      {/* Yedek & Geri Yükleme */}
+      {tab === 'sound' && (
+        <SoundSettings playSound={playSound} />
+      )}
+
       {tab === 'backup' && (
         <div style={{ display: 'grid', gap: 14 }}>
-          {/* Yedek Al */}
           <Card title="📤 Yedek Al">
-            <p style={{ color: '#64748b', fontSize: '0.88rem', marginBottom: 16, lineHeight: 1.6 }}>Tüm verilerinizi <strong style={{ color: '#f59e0b' }}>JSON formatında</strong> dışa aktarın. Bu dosyayı bilgisayarınıza kaydedin — yeni bir cihaza veya sonra geri yükleyebilirsiniz.</p>
+            <p style={{ color: '#64748b', fontSize: '0.88rem', marginBottom: 16, lineHeight: 1.6 }}>Tüm verilerinizi <strong style={{ color: '#f59e0b' }}>JSON formatında</strong> dışa aktarın.</p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 16 }}>
               {dataStats.slice(0, 4).map(d => (
                 <div key={d.label} style={{ background: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: '10px 12px', textAlign: 'center' }}>
@@ -144,23 +171,31 @@ export default function Settings({ db, save, exportJSON, importJSON }: Props) {
             </button>
           </Card>
 
-          {/* Geri Yükle */}
           <Card title="📂 Yedeği Geri Yükle">
-            <p style={{ color: '#64748b', fontSize: '0.88rem', marginBottom: 6, lineHeight: 1.6 }}>Daha önce aldığınız <strong style={{ color: '#f59e0b' }}>JSON yedek dosyasını</strong> seçin. Mevcut tüm verileriniz silinecek ve yedeğiniz geri yüklenecektir.</p>
+            <p style={{ color: '#64748b', fontSize: '0.88rem', marginBottom: 6, lineHeight: 1.6 }}>Daha önce aldığınız <strong style={{ color: '#f59e0b' }}>JSON yedek dosyasını</strong> seçin.</p>
             <div style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: 10, padding: '10px 16px', marginBottom: 16, color: '#fca5a5', fontSize: '0.83rem' }}>
               ⚠️ Bu işlem mevcut verilerinizin <strong>tamamını silecektir</strong>. Önce yedek almayı unutmayın!
             </div>
             <input ref={importRef} type="file" accept=".json" onChange={handleImport} style={{ display: 'none' }} />
             <button onClick={() => importRef.current?.click()} style={{ width: '100%', padding: '13px 0', background: 'rgba(59,130,246,0.1)', border: '2px dashed rgba(59,130,246,0.3)', borderRadius: 12, color: '#60a5fa', cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem', transition: 'all 0.2s' }}
-              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(59,130,246,0.15)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(59,130,246,0.5)'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(59,130,246,0.1)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(59,130,246,0.3)'; }}>
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(59,130,246,0.15)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(59,130,246,0.1)'; }}>
               📂 JSON Dosyası Seç & Geri Yükle
             </button>
           </Card>
+
+          <SmartImportManager db={db} save={save} showToast={showToast} showConfirm={showConfirm as (t: string, m: string, ok: () => void, d?: boolean) => void} />
         </div>
       )}
 
-      {/* Kısayollar */}
+      {tab === 'excel_export' && (
+        <ExcelExportPanel db={db} />
+      )}
+
+      {tab === 'activity' && (
+        <ActivityPanel db={db} save={save} showToast={showToast} showConfirm={showConfirm as (t: string, m: string, ok: () => void, d?: boolean) => void} />
+      )}
+
       {tab === 'shortcuts' && (
         <Card title="⌨️ Klavye Kısayolları">
           <p style={{ color: '#64748b', fontSize: '0.85rem', marginBottom: 16 }}>Uygulamayı daha hızlı kullanmak için aşağıdaki kısayolları kullanabilirsiniz.</p>
@@ -172,24 +207,17 @@ export default function Settings({ db, save, exportJSON, importJSON }: Props) {
               </div>
             ))}
           </div>
-          <div style={{ marginTop: 20, background: 'rgba(255,87,34,0.06)', border: '1px solid rgba(255,87,34,0.15)', borderRadius: 10, padding: '12px 16px' }}>
-            <p style={{ color: '#ff7043', fontSize: '0.85rem', fontWeight: 600, marginBottom: 4 }}>💡 Hızlı Eylem Butonu (FAB)</p>
-            <p style={{ color: '#64748b', fontSize: '0.83rem' }}>Ekranın sağ alt köşesindeki <strong style={{ color: '#ff7043' }}>+ turuncu buton</strong>a tıklayarak Hızlı Satış, Ürün Ekle, Gelir/Gider işlemlerini tek tıkla yapabilirsiniz.</p>
-          </div>
         </Card>
       )}
 
-      {/* Veri Onarım */}
       {tab === 'repair' && (
         <VeriOnarim db={db} save={save} showToast={showToast} showConfirm={showConfirm as (title: string, msg: string, onOk: () => void, danger?: boolean) => void} />
       )}
 
-      {/* Excel İçe Aktar */}
       {tab === 'excel' && (
         <ExcelImport db={db} save={save} />
       )}
 
-      {/* Veri Yönetimi */}
       {tab === 'data' && (
         <div style={{ display: 'grid', gap: 14 }}>
           <Card title="🗄️ Veri İstatistikleri">
@@ -210,33 +238,10 @@ export default function Settings({ db, save, exportJSON, importJSON }: Props) {
           <Card title="🗑️ Tehlikeli Alan">
             <p style={{ color: '#64748b', fontSize: '0.88rem', marginBottom: 16, lineHeight: 1.6 }}>Aşağıdaki işlemler <strong style={{ color: '#ef4444' }}>geri alınamaz</strong>. Önce yedek almanızı şiddetle tavsiye ederiz.</p>
             <div style={{ display: 'grid', gap: 10 }}>
-              <DangerAction
-                label="Satış Geçmişini Temizle"
-                desc={`${db.sales.length} satış kaydı silinecek`}
-                onConfirm={() => {
-                  save(prev => ({ ...prev, sales: [] }));
-                  showToast('Satış geçmişi temizlendi!');
-                }}
-              />
-              <DangerAction
-                label="Kasa İşlemlerini Temizle"
-                desc={`${db.kasa.length} kasa kaydı silinecek`}
-                onConfirm={() => {
-                  save(prev => ({ ...prev, kasa: [] }));
-                  showToast('Kasa temizlendi!');
-                }}
-              />
-              <DangerAction
-                label="Aktivite Günlüğünü Temizle"
-                desc={`${db._activityLog.length} kayıt silinecek`}
-                onConfirm={() => {
-                  save(prev => ({ ...prev, _activityLog: [] }));
-                  showToast('Aktivite günlüğü temizlendi!');
-                }}
-              />
-              <button onClick={clearData} style={{ width: '100%', padding: '14px 0', background: 'linear-gradient(135deg, rgba(220,38,38,0.15), rgba(239,68,68,0.08))', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 12, color: '#ef4444', fontWeight: 800, cursor: 'pointer', fontSize: '0.95rem', transition: 'all 0.2s' }}
-                onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg, rgba(220,38,38,0.25), rgba(239,68,68,0.15))'}
-                onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg, rgba(220,38,38,0.15), rgba(239,68,68,0.08))'}>
+              <DangerAction label="Satış Geçmişini Temizle" desc={`${db.sales.length} satış kaydı silinecek`} onConfirm={() => { save(prev => ({ ...prev, sales: [] })); showToast('Satış geçmişi temizlendi!'); }} />
+              <DangerAction label="Kasa İşlemlerini Temizle" desc={`${db.kasa.length} kasa kaydı silinecek`} onConfirm={() => { save(prev => ({ ...prev, kasa: [] })); showToast('Kasa temizlendi!'); }} />
+              <DangerAction label="Aktivite Günlüğünü Temizle" desc={`${db._activityLog.length} kayıt silinecek`} onConfirm={() => { save(prev => ({ ...prev, _activityLog: [] })); showToast('Aktivite günlüğü temizlendi!'); }} />
+              <button onClick={clearData} style={{ width: '100%', padding: '14px 0', background: 'linear-gradient(135deg, rgba(220,38,38,0.15), rgba(239,68,68,0.08))', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 12, color: '#ef4444', fontWeight: 800, cursor: 'pointer', fontSize: '0.95rem' }}>
                 ☠️ TÜM VERİLERİ SİL ve Sıfırla
               </button>
             </div>
@@ -247,42 +252,654 @@ export default function Settings({ db, save, exportJSON, importJSON }: Props) {
   );
 }
 
+function SoundSettings({ playSound }: { playSound: (type: SoundType) => void }) {
+  const [settings, setSettings] = useState<SoundSettings>(loadSoundSettings);
+
+  const updateSettings = (patch: Partial<SoundSettings>) => {
+    const next = { ...settings, ...patch };
+    setSettings(next);
+    saveSoundSettingsToStorage(next);
+  };
+
+  const themes: { id: SoundTheme; label: string; desc: string }[] = [
+    { id: 'standart', label: '🎵 Standart', desc: 'Dengeli ve sade sesler' },
+    { id: 'minimal', label: '🔇 Minimal', desc: 'Kısa ve hafif sesler' },
+    { id: 'yogun', label: '🔊 Yoğun', desc: 'Belirgin ve güçlü sesler' },
+  ];
+
+  const soundTypes: { type: SoundType; label: string }[] = [
+    { type: 'success', label: '✅ Başarı' },
+    { type: 'error', label: '❌ Hata' },
+    { type: 'warning', label: '⚠️ Uyarı' },
+    { type: 'sale', label: '🛒 Satış' },
+    { type: 'notification', label: '🔔 Bildirim' },
+  ];
+
+  return (
+    <div style={{ display: 'grid', gap: 14 }}>
+      <Card title="🔊 Ses Ayarları">
+        <div style={{ display: 'grid', gap: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontWeight: 700, color: '#f1f5f9', fontSize: '0.95rem' }}>Sesli Geri Bildirim</div>
+              <div style={{ color: '#64748b', fontSize: '0.82rem', marginTop: 2 }}>İşlem seslerini açın veya kapatın</div>
+            </div>
+            <button
+              onClick={() => updateSettings({ enabled: !settings.enabled })}
+              style={{ width: 52, height: 28, borderRadius: 14, border: 'none', cursor: 'pointer', position: 'relative', background: settings.enabled ? '#10b981' : '#334155', transition: 'background 0.2s' }}
+            >
+              <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', position: 'absolute', top: 4, left: settings.enabled ? 28 : 4, transition: 'left 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }} />
+            </button>
+          </div>
+
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+              <label style={lbl}>Ses Seviyesi</label>
+              <span style={{ color: '#ff7043', fontWeight: 700, fontSize: '0.85rem' }}>{Math.round(settings.volume * 100)}%</span>
+            </div>
+            <input
+              type="range" min={0} max={1} step={0.05}
+              value={settings.volume}
+              onChange={e => updateSettings({ volume: parseFloat(e.target.value) })}
+              style={{ width: '100%', accentColor: '#ff5722' }}
+              disabled={!settings.enabled}
+            />
+          </div>
+
+          <div>
+            <label style={lbl}>Ses Teması</label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+              {themes.map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => updateSettings({ theme: t.id })}
+                  disabled={!settings.enabled}
+                  style={{ padding: '12px 10px', border: `2px solid ${settings.theme === t.id ? '#ff5722' : 'rgba(255,255,255,0.08)'}`, borderRadius: 10, cursor: 'pointer', background: settings.theme === t.id ? 'rgba(255,87,34,0.1)' : 'rgba(0,0,0,0.2)', color: settings.theme === t.id ? '#ff7043' : '#64748b', textAlign: 'center', transition: 'all 0.15s', opacity: settings.enabled ? 1 : 0.5 }}
+                >
+                  <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>{t.label}</div>
+                  <div style={{ fontSize: '0.72rem', marginTop: 4, color: settings.theme === t.id ? '#ff7043' : '#475569' }}>{t.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <Card title="🎧 Sesleri Dinle">
+        <p style={{ color: '#64748b', fontSize: '0.85rem', marginBottom: 14 }}>Her ses tipini aşağıdan test edebilirsiniz.</p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+          {soundTypes.map(s => (
+            <button
+              key={s.type}
+              onClick={() => playSound(s.type)}
+              disabled={!settings.enabled}
+              style={{ padding: '10px 14px', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, cursor: 'pointer', background: 'rgba(0,0,0,0.3)', color: '#94a3b8', fontWeight: 600, fontSize: '0.85rem', transition: 'all 0.15s', opacity: settings.enabled ? 1 : 0.5 }}
+              onMouseEnter={e => { if (settings.enabled) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,87,34,0.1)'; }}
+              onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = 'rgba(0,0,0,0.3)'}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function ExcelExportPanel({ db }: { db: DB }) {
+  const { showToast } = useToast();
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [sheets, setSheets] = useState({ stok: true, satislar: true, cari: true, kasa: true });
+
+  type SheetKey = keyof typeof sheets;
+
+  const toggleSheet = (key: SheetKey) => setSheets(s => ({ ...s, [key]: !s[key] }));
+
+  const handleExport = () => {
+    const selectedSheets = (Object.keys(sheets) as SheetKey[]).filter(k => sheets[k]) as ('stok' | 'satislar' | 'cari' | 'kasa')[];
+    if (selectedSheets.length === 0) { showToast('En az bir sekme seçin!', 'warning'); return; }
+    try {
+      exportToExcel(db, { dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, sheets: selectedSheets });
+      showToast(`Excel dosyası oluşturuldu! (${selectedSheets.length} sekme)`, 'success');
+    } catch (e) {
+      showToast('Excel oluşturulamadı!', 'error');
+    }
+  };
+
+  const sheetDefs: { key: SheetKey; label: string; icon: string; count: number }[] = [
+    { key: 'stok', label: 'Stok / Ürünler', icon: '📦', count: db.products.length },
+    { key: 'satislar', label: 'Satışlar', icon: '🛒', count: db.sales.length },
+    { key: 'cari', label: 'Cari Hesaplar', icon: '👤', count: db.cari.length },
+    { key: 'kasa', label: 'Kasa İşlemleri', icon: '💰', count: db.kasa.length },
+  ];
+
+  return (
+    <div style={{ display: 'grid', gap: 14 }}>
+      <Card title="📊 Excel Dışa Aktarma">
+        <p style={{ color: '#64748b', fontSize: '0.88rem', marginBottom: 16, lineHeight: 1.6 }}>
+          Seçtiğiniz veri gruplarını Türkçe başlıklı, tarih ve para birimi formatlarıyla <strong style={{ color: '#10b981' }}>.xlsx</strong> dosyasına aktarın.
+        </p>
+
+        <div style={{ marginBottom: 16 }}>
+          <label style={lbl}>Tarih Aralığı (Satış ve Kasa için)</label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <label style={{ ...lbl, fontSize: '0.78rem' }}>Başlangıç</label>
+              <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={inp} />
+            </div>
+            <div>
+              <label style={{ ...lbl, fontSize: '0.78rem' }}>Bitiş</label>
+              <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={inp} />
+            </div>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 20 }}>
+          <label style={lbl}>Dahil Edilecek Sayfalar</label>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10 }}>
+            {sheetDefs.map(s => (
+              <div
+                key={s.key}
+                onClick={() => toggleSheet(s.key)}
+                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: sheets[s.key] ? 'rgba(16,185,129,0.08)' : 'rgba(0,0,0,0.2)', border: `2px solid ${sheets[s.key] ? '#10b981' : 'rgba(255,255,255,0.06)'}`, borderRadius: 10, cursor: 'pointer', transition: 'all 0.15s' }}
+              >
+                <span style={{ fontSize: '1.2rem' }}>{s.icon}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, color: sheets[s.key] ? '#f1f5f9' : '#64748b', fontSize: '0.88rem' }}>{s.label}</div>
+                  <div style={{ color: '#475569', fontSize: '0.75rem' }}>{s.count} kayıt</div>
+                </div>
+                <div style={{ width: 20, height: 20, borderRadius: 5, background: sheets[s.key] ? '#10b981' : 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '0.75rem', fontWeight: 800 }}>
+                  {sheets[s.key] ? '✓' : ''}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <button onClick={handleExport} style={{ ...btnPrimary, background: 'linear-gradient(135deg, #059669, #10b981)' }}>
+          📊 Excel Dosyasını İndir (.xlsx)
+        </button>
+      </Card>
+    </div>
+  );
+}
+
+function ActivityPanel({ db, save, showToast, showConfirm }: {
+  db: DB;
+  save: (fn: (prev: DB) => DB) => void;
+  showToast: (m: string, t?: string) => void;
+  showConfirm: (t: string, m: string, ok: () => void, d?: boolean) => void;
+}) {
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [dateFilter, setDateFilter] = useState('');
+
+  const activityLog = [...(db._activityLog || [])].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+
+  const actionTypes = Array.from(new Set(activityLog.map(a => {
+    const parts = a.action.split(':');
+    return parts[0].trim();
+  }))).slice(0, 15);
+
+  let filtered = activityLog;
+  if (typeFilter !== 'all') filtered = filtered.filter(a => a.action.startsWith(typeFilter));
+  if (dateFilter) filtered = filtered.filter(a => a.time.startsWith(dateFilter));
+
+  const getIcon = (action: string) => {
+    const a = action.toLowerCase();
+    if (a.includes('satış') || a.includes('satis')) return '🛒';
+    if (a.includes('ürün') || a.includes('urun') || a.includes('stok')) return '📦';
+    if (a.includes('kasa') || a.includes('gelir') || a.includes('gider')) return '💰';
+    if (a.includes('cari') || a.includes('müşteri')) return '👤';
+    if (a.includes('fatura')) return '🧾';
+    if (a.includes('sipariş')) return '📋';
+    if (a.includes('sil') || a.includes('iptal')) return '🗑️';
+    return '📝';
+  };
+
+  const clearLog = () => {
+    showConfirm('Aktivite Günlüğünü Temizle', `${db._activityLog.length} kayıt silinecek. Devam edilsin mi?`, () => {
+      save(prev => ({ ...prev, _activityLog: [] }));
+      showToast('Aktivite günlüğü temizlendi!');
+    }, true);
+  };
+
+  return (
+    <Card title="📋 Aktivite Günlüğü">
+      <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} style={{ ...inp, width: 160 }} placeholder="Tarih filtrele" />
+        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={{ ...inp, flex: 1 }}>
+          <option value="all">Tüm İşlemler</option>
+          {actionTypes.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+        {dateFilter && <button onClick={() => setDateFilter('')} style={{ padding: '9px 12px', background: '#334155', border: 'none', borderRadius: 8, color: '#94a3b8', cursor: 'pointer', fontSize: '0.82rem' }}>✕ Tarih</button>}
+        <button onClick={clearLog} style={{ padding: '9px 14px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, color: '#f87171', cursor: 'pointer', fontWeight: 600, fontSize: '0.82rem' }}>🗑️ Temizle</button>
+      </div>
+
+      <div style={{ color: '#475569', fontSize: '0.8rem', marginBottom: 10 }}>{filtered.length} kayıt (toplam {activityLog.length})</div>
+
+      <div style={{ display: 'grid', gap: 6, maxHeight: 500, overflowY: 'auto' }}>
+        {filtered.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '32px 0', color: '#334155' }}>
+            <div style={{ fontSize: '2rem', marginBottom: 8 }}>📋</div>
+            <p>Aktivite bulunamadı</p>
+          </div>
+        ) : filtered.map(a => (
+          <div key={a.id} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '10px 14px', background: 'rgba(0,0,0,0.2)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.04)' }}>
+            <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(255,87,34,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '0.9rem' }}>
+              {getIcon(a.action)}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ color: '#e2e8f0', fontWeight: 600, fontSize: '0.85rem' }}>{a.action}</div>
+              {a.detail && <div style={{ color: '#64748b', fontSize: '0.78rem', marginTop: 2 }}>{a.detail}</div>}
+            </div>
+            <div style={{ color: '#334155', fontSize: '0.75rem', whiteSpace: 'nowrap', flexShrink: 0 }}>
+              {formatDate(a.time)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+const KNOWN_ARRAYS: Record<string, string> = {
+  products: 'Ürünler', sales: 'Satışlar', suppliers: 'Tedarikçiler', cari: 'Cari Müşteriler',
+  kasa: 'Kasa Hareketleri', bankTransactions: 'Banka İşlemleri', orders: 'Siparişler',
+  invoices: 'Faturalar', stockMovements: 'Stok Hareketleri', peletSuppliers: 'Pelet Tedarikçi',
+  peletOrders: 'Pelet Sipariş', boruSuppliers: 'Boru Tedarikçi', boruOrders: 'Boru Sipariş',
+  budgets: 'Bütçe', returns: 'İadeler', ortakEmanetler: 'Ortak Emanet', installments: 'Taksitler',
+};
+
+const LEGACY_FIELD_MAP: Record<string, string> = {
+  urunler: 'products', satislar: 'sales', tedarikci: 'suppliers', musteriler: 'cari',
+  kasaHareketleri: 'kasa', bankHareketleri: 'bankTransactions', siparisler: 'orders',
+  faturalar: 'invoices', stokHareketleri: 'stockMovements', stoklar: 'products',
+  musteri: 'cari', tedarikcilar: 'suppliers', kasaIslemleri: 'kasa',
+};
+
+type ConflictResolution = 'overwrite' | 'skip' | 'merge';
+
+interface ConflictInfo {
+  entity: string;
+  label: string;
+  byId: number;
+  byName: number;
+  total: number;
+}
+
+function SmartImportManager({ db, save: _save, showToast, showConfirm }: {
+  db: DB;
+  save: (fn: (prev: DB) => DB) => void;
+  showToast: (m: string, t?: string) => void;
+  showConfirm: (t: string, m: string, ok: () => void, d?: boolean) => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [stage, setStage] = useState<'idle' | 'mapping' | 'preview' | 'done'>('idle');
+  const [rawData, setRawData] = useState<Record<string, unknown> | null>(null);
+  const [mapped, setMapped] = useState<Record<string, unknown> | null>(null);
+  const [errors, setErrors] = useState<string[]>([]);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [stats, setStats] = useState<Record<string, number>>({});
+  const [conflicts, setConflicts] = useState<ConflictInfo[]>([]);
+  const [resolutions, setResolutions] = useState<Record<string, ConflictResolution>>({});
+  const [fieldMappings, setFieldMappings] = useState<Record<string, string>>({});
+  const [unknownFields, setUnknownFields] = useState<string[]>([]);
+  const [legacyMapped, setLegacyMapped] = useState<Record<string, string>>({});
+
+  const detectFieldMappings = (data: Record<string, unknown>) => {
+    const unknown: string[] = [];
+    const autoMapped: Record<string, string> = {};
+    const knownAll = new Set([...Object.keys(KNOWN_ARRAYS), '_version', 'company', 'settings', 'pelletSettings', 'kasalar', 'matchRules', 'monitorRules', 'monitorLog', '_activityLog', 'soundSettings']);
+
+    Object.keys(data).forEach(key => {
+      if (!knownAll.has(key)) {
+        if (LEGACY_FIELD_MAP[key]) {
+          autoMapped[key] = LEGACY_FIELD_MAP[key];
+        } else {
+          unknown.push(key);
+        }
+      }
+    });
+    return { unknown, autoMapped };
+  };
+
+  const applyMappings = (data: Record<string, unknown>, mappings: Record<string, string>): Record<string, unknown> => {
+    const result: Record<string, unknown> = { ...data };
+    Object.entries(mappings).forEach(([src, dst]) => {
+      if (dst && dst !== '' && result[src] !== undefined) {
+        if (!result[dst] || !Array.isArray(result[dst])) {
+          result[dst] = result[src];
+        } else if (Array.isArray(result[dst]) && Array.isArray(result[src])) {
+          result[dst] = [...(result[dst] as unknown[]), ...(result[src] as unknown[])];
+        }
+        delete result[src];
+      }
+    });
+    return result;
+  };
+
+  const detectConflicts = (data: Record<string, unknown>): ConflictInfo[] => {
+    const checks: Array<{ entity: string; label: string; dbItems: { id?: string; name?: string; code?: string }[]; importKey: string }> = [
+      { entity: 'products', label: 'Ürün', dbItems: db.products, importKey: 'products' },
+      { entity: 'sales', label: 'Satış', dbItems: db.sales, importKey: 'sales' },
+      { entity: 'cari', label: 'Cari Müşteri', dbItems: db.cari, importKey: 'cari' },
+      { entity: 'suppliers', label: 'Tedarikçi', dbItems: db.suppliers || [], importKey: 'suppliers' },
+    ];
+
+    return checks.map(({ entity, label, dbItems, importKey }) => {
+      const incoming = (data[importKey] as { id?: string; name?: string; code?: string }[]) || [];
+      const existingIds = new Set(dbItems.map(d => d.id).filter(Boolean));
+      const existingNames = new Set(dbItems.map(d => (d.name || '').toLowerCase().trim()).filter(Boolean));
+      const byId = incoming.filter(item => item.id && existingIds.has(item.id)).length;
+      const byName = incoming.filter(item => !item.id && item.name && existingNames.has(item.name.toLowerCase().trim())).length;
+      return { entity, label, byId, byName, total: byId + byName };
+    }).filter(c => c.total > 0);
+  };
+
+  const analyzeData = (data: Record<string, unknown>) => {
+    const errs: string[] = [];
+    const warns: string[] = [];
+    const st: Record<string, number> = {};
+
+    Object.entries(KNOWN_ARRAYS).forEach(([key]) => {
+      const val = data[key];
+      if (Array.isArray(val)) {
+        if (val.length > 0) st[key] = val.length;
+        if (val.length === 0) warns.push(`"${KNOWN_ARRAYS[key]}" alanı boş`);
+      } else if (val !== undefined) {
+        errs.push(`"${key}" alanı geçersiz format — dizi bekleniyor`);
+      }
+    });
+
+    if (!data.company || typeof data.company !== 'object') warns.push('Şirket bilgisi bulunamadı — varsayılan oluşturulacak');
+    if (!data.pelletSettings) warns.push('Pelet ayarları bulunamadı — varsayılan kullanılacak');
+    if (!data._version) warns.push('Versiyon bilgisi yok — eski format olabilir, lütfen kontrol edin');
+    else if ((data._version as number) < 1) warns.push(`Eski versiyon (${data._version}) — bazı alanlar eksik olabilir`);
+
+    return { errs, warns, st };
+  };
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target?.result as string);
+        if (typeof data !== 'object' || Array.isArray(data)) {
+          setErrors(['Geçersiz JSON formatı — nesne bekleniyor']);
+          setStage('preview');
+          setRawData(null);
+          return;
+        }
+        setRawData(data);
+        const { unknown, autoMapped } = detectFieldMappings(data);
+        setLegacyMapped(autoMapped);
+        setUnknownFields(unknown);
+        const initMappings: Record<string, string> = {};
+        unknown.forEach(f => { initMappings[f] = ''; });
+        setFieldMappings(initMappings);
+
+        if (unknown.length > 0 || Object.keys(autoMapped).length > 0) {
+          setStage('mapping');
+        } else {
+          proceedToPreview(data, {});
+        }
+      } catch {
+        setErrors(['JSON ayrıştırılamadı — dosya bozuk veya geçersiz format']);
+        setStage('preview');
+        setRawData(null);
+      }
+    };
+    reader.readAsText(file);
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const proceedToPreview = (data: Record<string, unknown>, userMappings: Record<string, string>) => {
+    const allMappings = { ...legacyMapped, ...userMappings };
+    const resolved = applyMappings(data, allMappings);
+    const { errs, warns, st } = analyzeData(resolved);
+    const detectedConflicts = detectConflicts(resolved);
+    const initRes: Record<string, ConflictResolution> = {};
+    detectedConflicts.forEach(c => { initRes[c.entity] = 'overwrite'; });
+    setMapped(resolved);
+    setErrors(errs);
+    setWarnings(warns);
+    setStats(st);
+    setConflicts(detectedConflicts);
+    setResolutions(initRes);
+    setStage('preview');
+  };
+
+  const doImport = () => {
+    if (!mapped) return;
+    showConfirm('Veri Aktarımını Onayla', 'Seçilen çakışma çözümleri uygulanacak ve veriler içe aktarılacak. Mevcut veriler etkilenebilir. Onaylıyor musunuz?', () => {
+      try {
+        const raw = localStorage.getItem('sobaYonetim');
+        const current = raw ? JSON.parse(raw) : {};
+        const def = {
+          _version: 1, products: [], sales: [], suppliers: [], orders: [], cari: [], kasa: [],
+          kasalar: [{ id: 'nakit', name: 'Nakit', icon: '💵' }, { id: 'banka', name: 'Banka', icon: '🏦' }],
+          bankTransactions: [], matchRules: [], monitorRules: [], monitorLog: [], stockMovements: [],
+          peletSuppliers: [], peletOrders: [], boruSuppliers: [], boruOrders: [],
+          invoices: [], budgets: [], returns: [], _activityLog: [],
+          company: current.company || {}, settings: {}, pelletSettings: { gramaj: 14, kgFiyat: 6.5, cuvalKg: 15, critDays: 3 },
+          ortakEmanetler: [], installments: [],
+        };
+        let finalData: Record<string, unknown> = { ...def, ...mapped };
+
+        const conflictEntities = ['products', 'cari', 'suppliers', 'sales'] as const;
+        conflictEntities.forEach(entity => {
+          const resolution = resolutions[entity] || 'overwrite';
+          const incoming = (mapped[entity] as { id?: string; name?: string }[]) || [];
+          const existing = (current[entity] as { id?: string; name?: string }[]) || [];
+
+          if (resolution === 'skip') {
+            const existingIds = new Set(existing.map((x: { id?: string }) => x.id).filter(Boolean));
+            const existingNames = new Set(existing.map((x: { name?: string }) => (x.name || '').toLowerCase()).filter(Boolean));
+            finalData[entity] = [
+              ...existing,
+              ...incoming.filter(item => !existingIds.has(item.id) && !existingNames.has((item.name || '').toLowerCase())),
+            ];
+          } else if (resolution === 'merge') {
+            const existingMap = new Map(existing.map((x: { id?: string }) => [x.id, x]));
+            incoming.forEach(item => {
+              if (item.id && existingMap.has(item.id)) {
+                existingMap.set(item.id, { ...existingMap.get(item.id)!, ...item });
+              } else {
+                existingMap.set(item.id || Math.random().toString(), item);
+              }
+            });
+            finalData[entity] = Array.from(existingMap.values());
+          }
+        });
+
+        if (!finalData.kasalar || (finalData.kasalar as unknown[]).length === 0) finalData.kasalar = def.kasalar;
+        if (!finalData.pelletSettings) finalData.pelletSettings = def.pelletSettings;
+        if (!finalData.company || typeof finalData.company !== 'object') finalData.company = def.company;
+
+        localStorage.setItem('sobaYonetim', JSON.stringify(finalData));
+        setStage('done');
+        showToast('Veriler başarıyla aktarıldı! Sayfa yenilenecek...', 'success');
+        setTimeout(() => window.location.reload(), 1200);
+      } catch {
+        showToast('İçe aktarma sırasında hata oluştu!', 'error');
+      }
+    }, true);
+  };
+
+  const reset = () => {
+    setStage('idle'); setRawData(null); setMapped(null); setErrors([]); setWarnings([]);
+    setStats({}); setConflicts([]); setResolutions({}); setFieldMappings({}); setUnknownFields([]); setLegacyMapped({});
+  };
+
+  const btnStyle = (active: boolean, color: string) => ({
+    padding: '6px 14px', border: `1px solid ${active ? color : '#334155'}`, borderRadius: 8,
+    background: active ? `${color}20` : 'transparent', color: active ? color : '#64748b',
+    cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem',
+  });
+
+  return (
+    <Card title="🧠 Akıllı Veri İçe Aktarma">
+      <p style={{ color: '#64748b', fontSize: '0.88rem', marginBottom: 14, lineHeight: 1.6 }}>
+        JSON yedek dosyanızı analiz eder; eski format alanlarını otomatik eşler, yeni alanlar için eşleme seçenekleri sunar ve çakışmaları çözerek güvenli aktarım yapar.
+      </p>
+
+      {stage === 'idle' && (
+        <>
+          <input ref={fileRef} type="file" accept=".json" onChange={handleFile} style={{ display: 'none' }} />
+          <button onClick={() => fileRef.current?.click()} style={{ width: '100%', padding: '16px 0', background: 'rgba(139,92,246,0.08)', border: '2px dashed rgba(139,92,246,0.3)', borderRadius: 12, color: '#a78bfa', cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem' }}>
+            🧠 JSON Dosyası Seç & Akıllı Analiz Başlat
+          </button>
+        </>
+      )}
+
+      {stage === 'mapping' && rawData && (
+        <div style={{ display: 'grid', gap: 14 }}>
+          <div style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.95rem' }}>🗺️ Alan Eşleme (Field Mapping)</div>
+          {Object.keys(legacyMapped).length > 0 && (
+            <div style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 10, padding: '12px 16px' }}>
+              <div style={{ color: '#10b981', fontWeight: 700, marginBottom: 8 }}>✅ Otomatik Algılanan Eski Alanlar</div>
+              {Object.entries(legacyMapped).map(([src, dst]) => (
+                <div key={src} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6, fontSize: '0.85rem' }}>
+                  <span style={{ color: '#f59e0b', fontFamily: 'monospace', background: 'rgba(0,0,0,0.3)', padding: '2px 8px', borderRadius: 4 }}>{src}</span>
+                  <span style={{ color: '#475569' }}>→</span>
+                  <span style={{ color: '#10b981', fontFamily: 'monospace', background: 'rgba(0,0,0,0.3)', padding: '2px 8px', borderRadius: 4 }}>{dst}</span>
+                  <span style={{ color: '#64748b', fontSize: '0.75rem' }}>({KNOWN_ARRAYS[dst] || dst})</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {unknownFields.length > 0 && (
+            <div style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, padding: '12px 16px' }}>
+              <div style={{ color: '#fbbf24', fontWeight: 700, marginBottom: 10 }}>⚠️ Tanınmayan Alanlar — Eşleme Seçin</div>
+              {unknownFields.map(field => (
+                <div key={field} style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 10 }}>
+                  <span style={{ color: '#f59e0b', fontFamily: 'monospace', background: 'rgba(0,0,0,0.3)', padding: '3px 10px', borderRadius: 6, minWidth: 120, textAlign: 'center' }}>{field}</span>
+                  <span style={{ color: '#475569', fontSize: '0.9rem' }}>→</span>
+                  <select
+                    value={fieldMappings[field] || ''}
+                    onChange={e => setFieldMappings(prev => ({ ...prev, [field]: e.target.value }))}
+                    style={{ flex: 1, padding: '7px 10px', background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', fontSize: '0.85rem' }}
+                  >
+                    <option value="">— Yoksay (aktarma)</option>
+                    {Object.entries(KNOWN_ARRAYS).map(([k, label]) => (
+                      <option key={k} value={k}>{label} ({k})</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={() => proceedToPreview(rawData, fieldMappings)} style={{ flex: 1, padding: '11px 0', background: 'linear-gradient(135deg, #7c3aed, #8b5cf6)', border: 'none', borderRadius: 10, color: '#fff', fontWeight: 700, cursor: 'pointer' }}>
+              Devam → Önizleme & Çakışma Çözümü
+            </button>
+            <button onClick={reset} style={{ padding: '11px 18px', background: '#273548', border: '1px solid #334155', borderRadius: 10, color: '#94a3b8', cursor: 'pointer' }}>Sıfırla</button>
+          </div>
+        </div>
+      )}
+
+      {stage === 'preview' && (
+        <div style={{ display: 'grid', gap: 12 }}>
+          {errors.length > 0 && (
+            <div style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, padding: '12px 16px' }}>
+              <div style={{ color: '#f87171', fontWeight: 700, marginBottom: 8 }}>❌ Hatalar</div>
+              {errors.map((e, i) => <div key={i} style={{ color: '#fca5a5', fontSize: '0.85rem', marginBottom: 4 }}>• {e}</div>)}
+            </div>
+          )}
+          {warnings.length > 0 && (
+            <div style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.15)', borderRadius: 10, padding: '12px 16px' }}>
+              <div style={{ color: '#fbbf24', fontWeight: 700, marginBottom: 8 }}>⚠️ Uyarılar</div>
+              {warnings.map((w, i) => <div key={i} style={{ color: '#fde68a', fontSize: '0.85rem', marginBottom: 4 }}>• {w}</div>)}
+            </div>
+          )}
+          {Object.keys(stats).length > 0 && (
+            <div style={{ background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)', borderRadius: 10, padding: '12px 16px' }}>
+              <div style={{ color: '#60a5fa', fontWeight: 700, marginBottom: 8 }}>📊 İçe Aktarılacak Kayıtlar</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
+                {Object.entries(stats).map(([k, v]) => (
+                  <div key={k} style={{ background: 'rgba(0,0,0,0.3)', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
+                    <div style={{ color: '#f1f5f9', fontWeight: 700 }}>{v}</div>
+                    <div style={{ color: '#475569', fontSize: '0.72rem' }}>{KNOWN_ARRAYS[k] || k}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {conflicts.length > 0 && (
+            <div style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, padding: '12px 16px' }}>
+              <div style={{ color: '#f87171', fontWeight: 700, marginBottom: 12 }}>⚡ Çakışma Çözümü</div>
+              {conflicts.map(c => (
+                <div key={c.entity} style={{ marginBottom: 14, paddingBottom: 12, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div style={{ color: '#fca5a5', fontSize: '0.85rem', marginBottom: 8 }}>
+                    <strong>{c.label}</strong>: {c.byId > 0 && `${c.byId} aynı ID`}{c.byId > 0 && c.byName > 0 && ', '}{c.byName > 0 && `${c.byName} aynı isim`} çakışması
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => setResolutions(r => ({ ...r, [c.entity]: 'overwrite' }))} style={btnStyle(resolutions[c.entity] === 'overwrite', '#ef4444')}>
+                      🔄 Üzerine Yaz
+                    </button>
+                    <button onClick={() => setResolutions(r => ({ ...r, [c.entity]: 'skip' }))} style={btnStyle(resolutions[c.entity] === 'skip', '#f59e0b')}>
+                      ⏭️ Çakışanları Atla
+                    </button>
+                    <button onClick={() => setResolutions(r => ({ ...r, [c.entity]: 'merge' }))} style={btnStyle(resolutions[c.entity] === 'merge', '#10b981')}>
+                      🔀 Birleştir
+                    </button>
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: '#475569', marginTop: 6 }}>
+                    {resolutions[c.entity] === 'overwrite' && 'Mevcut kayıtlar yeni verilerle tamamen değiştirilir.'}
+                    {resolutions[c.entity] === 'skip' && 'Çakışan kayıtlar atlanır; mevcut veriler korunur, yeni olanlar eklenir.'}
+                    {resolutions[c.entity] === 'merge' && 'Mevcut kayıtlar yeni alanlarla güncellenir; hiç kayıp olmaz.'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 10 }}>
+            {mapped && errors.length === 0 && (
+              <button onClick={doImport} style={{ flex: 1, padding: '11px 0', background: 'linear-gradient(135deg, #7c3aed, #8b5cf6)', border: 'none', borderRadius: 10, color: '#fff', fontWeight: 700, cursor: 'pointer' }}>
+                ✅ Aktarımı Onayla & Başlat
+              </button>
+            )}
+            <button onClick={reset} style={{ padding: '11px 18px', background: '#273548', border: '1px solid #334155', borderRadius: 10, color: '#94a3b8', cursor: 'pointer' }}>Sıfırla</button>
+          </div>
+        </div>
+      )}
+
+      {stage === 'done' && (
+        <div style={{ textAlign: 'center', padding: '24px 0' }}>
+          <div style={{ fontSize: '3rem', marginBottom: 12 }}>✅</div>
+          <div style={{ color: '#10b981', fontWeight: 700, fontSize: '1.1rem' }}>Veriler başarıyla aktarıldı!</div>
+          <div style={{ color: '#64748b', fontSize: '0.85rem', marginTop: 6 }}>Sayfa yenileniyor...</div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function VeriOnarim({ db, save, showToast, showConfirm }: { db: DB; save: (fn: (prev: DB) => DB) => void; showToast: (m: string, t?: string) => void; showConfirm: (title: string, msg: string, onOk: () => void, danger?: boolean) => void }) {
   const [results, setResults] = useState<string[]>([]);
 
   const diagnose = () => {
     const issues: string[] = [];
-    // Duplicate sales check
     const saleIds = db.sales.map(s => s.id);
     const dupSales = saleIds.length - new Set(saleIds).size;
     if (dupSales > 0) issues.push(`⚠️ ${dupSales} tekrarlanan satış kaydı`);
-
-    // Negative stock
     const negStock = db.products.filter(p => p.stock < 0).length;
     if (negStock > 0) issues.push(`⚠️ ${negStock} ürünün stok değeri negatif`);
-
-    // Orphaned kasa entries (cariId points to nonexistent cari)
     const cariIds = new Set(db.cari.map(c => c.id));
     const orphanKasa = db.kasa.filter(k => k.cariId && !cariIds.has(k.cariId)).length;
     if (orphanKasa > 0) issues.push(`⚠️ ${orphanKasa} kasa kaydı silinmiş cariye bağlı`);
-
-    // Products with no stock movement but has sales
     const soldProductIds = new Set(db.sales.flatMap(s => s.items?.map((i: { productId: string }) => i.productId) || [s.productId]).filter(Boolean));
     const stocklessProducts = db.products.filter(p => soldProductIds.has(p.id) && p.stock === 0).length;
     if (stocklessProducts > 0) issues.push(`ℹ️ ${stocklessProducts} ürün satıldı ama stok sıfır`);
-
-    // Missing company info
-    if (!db.company.name) issues.push('ℹ️ Şirket adı girilmemiş (Fatura/Raporlarda görünür)');
-
-    // localStorage size
+    if (!db.company.name) issues.push('ℹ️ Şirket adı girilmemiş');
     const lsSize = new Blob([localStorage.getItem('sobaYonetim') || '']).size;
     const lsKB = Math.round(lsSize / 1024);
     issues.push(`📊 localStorage boyutu: ${lsKB} KB (limit ~5MB)`);
-
-    // Invoice without cari link
     const orphanInvoices = (db.invoices || []).filter(inv => inv.cariId && !cariIds.has(inv.cariId)).length;
     if (orphanInvoices > 0) issues.push(`⚠️ ${orphanInvoices} fatura silinmiş cariye bağlı`);
-
     setResults(issues.length === 0 ? ['✅ Veri tutarlılık kontrolü tamam. Sorun bulunamadı!'] : issues);
   };
 
@@ -334,7 +951,7 @@ function VeriOnarim({ db, save, showToast, showConfirm }: { db: DB; save: (fn: (
     db.cari.forEach(c => { const n = c.name.trim().toLowerCase(); if (!nameCounts[n]) nameCounts[n] = []; nameCounts[n].push(c.id); });
     const dups = Object.entries(nameCounts).filter(([, ids]) => ids.length > 1);
     if (dups.length === 0) { showToast('Tekrarlanan cari bulunamadı!'); return; }
-    showConfirm('Cari Birleştir', `${dups.length} isimde tekrar var. Her grup için ilk kaydı koruyup diğerleri silinecek. Devam?`, () => {
+    showConfirm('Cari Birleştir', `${dups.length} isimde tekrar var. İlk kayıt korunacak. Devam?`, () => {
       save(prev => {
         const toRemove = new Set<string>();
         dups.forEach(([, ids]) => ids.slice(1).forEach(id => toRemove.add(id)));
@@ -348,9 +965,7 @@ function VeriOnarim({ db, save, showToast, showConfirm }: { db: DB; save: (fn: (
   return (
     <div style={{ display: 'grid', gap: 14 }}>
       <Card title="🔧 Veri Tutarlılık Kontrolü">
-        <p style={{ color: '#64748b', fontSize: '0.85rem', marginBottom: 16, lineHeight: 1.6 }}>
-          Veritabanınızı analiz ederek tutarsız, eksik veya hatalı kayıtları tespit edin.
-        </p>
+        <p style={{ color: '#64748b', fontSize: '0.85rem', marginBottom: 16, lineHeight: 1.6 }}>Veritabanınızı analiz ederek tutarsız, eksik veya hatalı kayıtları tespit edin.</p>
         <button onClick={diagnose} style={{ width: '100%', padding: '13px 0', background: 'linear-gradient(135deg,#3b82f6,#2563eb)', border: 'none', borderRadius: 12, color: '#fff', fontWeight: 800, cursor: 'pointer', fontSize: '0.95rem', marginBottom: 14 }}>
           🔍 Veriyi Analiz Et
         </button>
@@ -366,9 +981,6 @@ function VeriOnarim({ db, save, showToast, showConfirm }: { db: DB; save: (fn: (
       </Card>
 
       <Card title="🛠️ Onarım Araçları">
-        <p style={{ color: '#64748b', fontSize: '0.88rem', marginBottom: 16, lineHeight: 1.6 }}>
-          Tespit edilen sorunları otomatik düzeltmek için aşağıdaki araçları kullanın. Her işlem onay ister.
-        </p>
         <div style={{ display: 'grid', gap: 10 }}>
           {[
             { label: '📦 Negatif Stokları Sıfırla', desc: 'Stok değeri 0\'ın altına düşmüş ürünleri sıfıra çeker', action: fixNegativeStock, color: '#f59e0b' },

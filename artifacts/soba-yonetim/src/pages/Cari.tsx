@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Modal } from '@/components/Modal';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
+import { exportToExcel } from '@/lib/excelExport';
 import { genId, formatMoney, formatDate } from '@/lib/utils-tr';
 import type { DB, Cari as CariType } from '@/types';
 
@@ -73,6 +74,7 @@ export default function Cari({ db, save }: Props) {
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
         <button onClick={openAdd} style={{ background: '#ff5722', border: 'none', borderRadius: 10, color: '#fff', padding: '10px 20px', fontWeight: 700, cursor: 'pointer' }}>+ Yeni Cari</button>
+        <button onClick={() => { exportToExcel(db, { sheets: ['cari'] }); showToast('Excel indirildi!', 'success'); }} style={{ background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 10, color: '#a78bfa', padding: '10px 16px', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}>📊 Excel İndir</button>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Ara..." style={{ flex: 1, padding: '9px 13px', background: '#1e293b', border: '1px solid #334155', borderRadius: 10, color: '#f1f5f9' }} />
         {(['all', 'musteri', 'tedarikci'] as const).map(f => (
           <button key={f} onClick={() => setFilter(f)} style={{ padding: '8px 14px', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.82rem', background: filter === f ? '#ff5722' : '#273548', color: filter === f ? '#fff' : '#94a3b8' }}>

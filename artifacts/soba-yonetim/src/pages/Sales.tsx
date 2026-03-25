@@ -1,9 +1,12 @@
 import { useState, useMemo } from 'react';
+import { toast } from 'sonner';
 import { Modal } from '@/components/Modal';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
+import { useSoundFeedback } from '@/hooks/useSoundFeedback';
+import { exportToExcel } from '@/lib/excelExport';
 import { genId, formatMoney, formatDate } from '@/lib/utils-tr';
-import type { DB, Sale, SaleItem, Product } from '@/types';
+import type { DB, Sale, SaleItem } from '@/types';
 
 interface Props { db: DB; save: (fn: (prev: DB) => DB) => void; }
 
@@ -12,6 +15,7 @@ const paymentTypes = ['nakit', 'kart', 'havale', 'cari'] as const;
 export default function Sales({ db, save }: Props) {
   const { showToast } = useToast();
   const { showConfirm } = useConfirm();
+  const { playSound } = useSoundFeedback();
   const [modalOpen, setModalOpen] = useState(false);
   const [receiptId, setReceiptId] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'tamamlandi' | 'iade' | 'iptal'>('all');
@@ -99,7 +103,8 @@ export default function Sales({ db, save }: Props) {
       return { ...prev, products, sales: [...prev.sales, sale], kasa: [...prev.kasa, ...kasaEntry], cari, stockMovements };
     });
 
-    showToast(`✅ Satış kaydedildi! ${formatMoney(total)}`, 'success');
+    playSound('sale');
+    toast.success(`Satış kaydedildi! ${formatMoney(total)}`);
     setReceiptId(sale.id);
     setItems([]);
     setCustomerId('');
@@ -153,6 +158,7 @@ export default function Sales({ db, save }: Props) {
 
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
         <button onClick={() => setModalOpen(true)} style={{ background: '#ff5722', border: 'none', borderRadius: 10, color: '#fff', padding: '10px 20px', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem' }}>+ Yeni Satış</button>
+        <button onClick={() => { exportToExcel(db, { sheets: ['satislar'], dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }); showToast('Excel indirildi!', 'success'); }} style={{ background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 10, color: '#10b981', padding: '10px 16px', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}>📊 Excel İndir</button>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Ürün ara..." style={sinp} />
         <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ ...sinp, width: 160 }} />
         <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ ...sinp, width: 160 }} />

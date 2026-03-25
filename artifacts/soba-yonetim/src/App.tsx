@@ -1,7 +1,8 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useDB } from '@/hooks/useDB';
-import { ToastProvider, useToast } from '@/components/Toast';
+import { useToast } from '@/components/Toast';
 import { ConfirmProvider } from '@/components/ConfirmDialog';
+import { Toaster } from 'sonner';
 import Dashboard from '@/pages/Dashboard';
 import Products from '@/pages/Products';
 import Sales from '@/pages/Sales';
@@ -455,11 +456,10 @@ function AppContent() {
 
 export default function App() {
   return (
-    <ToastProvider>
-      <ConfirmProvider>
-        <AppContent />
-      </ConfirmProvider>
-    </ToastProvider>
+    <ConfirmProvider>
+      <AppContent />
+      <Toaster richColors position="bottom-right" />
+    </ConfirmProvider>
   );
 }
 

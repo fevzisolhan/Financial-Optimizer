@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, Area, AreaChart } from 'recharts';
 import { formatMoney, formatDate } from '@/lib/utils-tr';
+import { exportToExcel } from '@/lib/excelExport';
 import type { DB } from '@/types';
 
 interface Props {
@@ -45,6 +46,7 @@ const chartStyle = {
 };
 
 export default function Dashboard({ db, onTabChange }: Props) {
+  const [activityOpen, setActivityOpen] = useState(true);
   const stats = useMemo(() => {
     const today = new Date().toDateString();
     const todaySales = db.sales.filter(s => s.status === 'tamamlandi' && new Date(s.createdAt).toDateString() === today);
@@ -185,6 +187,21 @@ export default function Dashboard({ db, onTabChange }: Props) {
       {/* ÖNERILER */}
       <Oneriler db={db} onTabChange={onTabChange} />
 
+      {/* Excel Download Bar */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 18, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ color: '#475569', fontSize: '0.82rem', fontWeight: 600 }}>📊 Excel İndir:</span>
+        {[
+          { label: 'Tüm Rapor', sheets: ['stok', 'satislar', 'cari', 'kasa'] as ('stok' | 'satislar' | 'cari' | 'kasa')[], color: '#ff5722' },
+          { label: 'Satışlar', sheets: ['satislar'] as ('stok' | 'satislar' | 'cari' | 'kasa')[], color: '#10b981' },
+          { label: 'Stok', sheets: ['stok'] as ('stok' | 'satislar' | 'cari' | 'kasa')[], color: '#3b82f6' },
+          { label: 'Kasa', sheets: ['kasa'] as ('stok' | 'satislar' | 'cari' | 'kasa')[], color: '#f59e0b' },
+        ].map(btn => (
+          <button key={btn.label} onClick={() => exportToExcel(db, { sheets: btn.sheets })} style={{ padding: '7px 14px', background: `${btn.color}15`, border: `1px solid ${btn.color}30`, borderRadius: 8, color: btn.color, fontWeight: 700, cursor: 'pointer', fontSize: '0.82rem' }}>
+            {btn.label}
+          </button>
+        ))}
+      </div>
+
       {/* BOTTOM ROW */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 18 }}>
         {/* Recent Sales */}
@@ -247,22 +264,26 @@ export default function Dashboard({ db, onTabChange }: Props) {
           )}
 
           <div style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)', borderRadius: 18, border: '1px solid rgba(255,255,255,0.07)', flex: 1 }}>
-            <div style={{ padding: '18px 20px 12px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+            <div style={{ padding: '18px 20px 12px', borderBottom: activityOpen ? '1px solid rgba(255,255,255,0.04)' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setActivityOpen(o => !o)}>
               <h3 style={{ fontWeight: 700, color: '#f1f5f9', fontSize: '0.95rem' }}>📋 Son Aktiviteler</h3>
+              <span style={{ color: '#475569', fontSize: '0.85rem', userSelect: 'none' }}>{activityOpen ? '▲' : '▼'}</span>
             </div>
-            <div style={{ padding: '10px 0' }}>
-              {recentActivity.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '24px 0', color: '#1e3a5f', fontSize: '0.83rem' }}>Aktivite bulunamadı</div>
-              ) : recentActivity.map((a, i) => (
-                <div key={a.id} style={{ display: 'flex', gap: 10, padding: '8px 20px', alignItems: 'flex-start' }}>
-                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#334155', flexShrink: 0, marginTop: 6 }} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ color: '#94a3b8', fontSize: '0.83rem', lineHeight: 1.4 }}>{a.action}</div>
-                    {a.detail && <div style={{ color: '#334155', fontSize: '0.75rem', marginTop: 1 }}>{a.detail}</div>}
+            {activityOpen && (
+              <div style={{ padding: '10px 0' }}>
+                {recentActivity.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '24px 0', color: '#1e3a5f', fontSize: '0.83rem' }}>Aktivite bulunamadı</div>
+                ) : recentActivity.map((a) => (
+                  <div key={a.id} style={{ display: 'flex', gap: 10, padding: '8px 20px', alignItems: 'flex-start' }}>
+                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#334155', flexShrink: 0, marginTop: 6 }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ color: '#94a3b8', fontSize: '0.83rem', lineHeight: 1.4 }}>{a.action}</div>
+                      {a.detail && <div style={{ color: '#334155', fontSize: '0.75rem', marginTop: 1 }}>{a.detail}</div>}
+                    </div>
+                    <div style={{ color: '#334155', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>{formatDate(a.time)}</div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

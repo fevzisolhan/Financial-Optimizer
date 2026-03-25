@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Modal } from '@/components/Modal';
 import { useToast } from '@/components/Toast';
+import { useSoundFeedback } from '@/hooks/useSoundFeedback';
+import { exportToExcel } from '@/lib/excelExport';
 import { genId, formatDate, getCategoryIcon } from '@/lib/utils-tr';
 import type { DB } from '@/types';
 
@@ -8,6 +10,7 @@ interface Props { db: DB; save: (fn: (prev: DB) => DB) => void; }
 
 export default function Stock({ db, save }: Props) {
   const { showToast } = useToast();
+  const { playSound } = useSoundFeedback();
   const [adjustModal, setAdjustModal] = useState(false);
   const [form, setForm] = useState({ productId: '', type: 'giris' as 'giris' | 'cikis' | 'duzeltme', amount: '', note: '' });
   const [tab, setTab] = useState<'products' | 'history'>('products');
@@ -42,6 +45,7 @@ export default function Stock({ db, save }: Props) {
       }],
     }));
 
+    playSound('success');
     showToast(`Stok güncellendi: ${product.name} → ${after}`, 'success');
     setForm({ productId: '', type: 'giris', amount: '', note: '' });
     setAdjustModal(false);
@@ -62,6 +66,7 @@ export default function Stock({ db, save }: Props) {
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
         <button onClick={() => setAdjustModal(true)} style={{ background: '#ff5722', border: 'none', borderRadius: 10, color: '#fff', padding: '10px 20px', fontWeight: 700, cursor: 'pointer' }}>⚙️ Stok Ayarla</button>
+        <button onClick={() => { exportToExcel(db, { sheets: ['stok'] }); showToast('Excel indirildi!', 'success'); }} style={{ background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 10, color: '#10b981', padding: '10px 16px', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}>📊 Excel İndir</button>
         {(['products', 'history'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)} style={{ padding: '9px 16px', border: 'none', borderRadius: 10, cursor: 'pointer', fontWeight: 600, background: tab === t ? '#ff5722' : '#273548', color: tab === t ? '#fff' : '#94a3b8' }}>
             {t === 'products' ? '📦 Ürünler' : '📋 Hareketler'}

@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react';
 import { Modal } from '@/components/Modal';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
+import { useSoundFeedback } from '@/hooks/useSoundFeedback';
+import { exportToExcel } from '@/lib/excelExport';
 import { genId, formatMoney, formatDate } from '@/lib/utils-tr';
 import type { DB } from '@/types';
 
@@ -10,6 +12,7 @@ interface Props { db: DB; save: (fn: (prev: DB) => DB) => void; }
 export default function Kasa({ db, save }: Props) {
   const { showToast } = useToast();
   const { showConfirm } = useConfirm();
+  const { playSound } = useSoundFeedback();
   const [incomeModal, setIncomeModal] = useState(false);
   const [expenseModal, setExpenseModal] = useState(false);
   const [filter, setFilter] = useState('all');
@@ -54,6 +57,7 @@ export default function Kasa({ db, save }: Props) {
       }
       return { ...prev, kasa: [...prev.kasa, entry], cari };
     });
+    playSound(type === 'gelir' ? 'success' : 'notification');
     showToast(`${type === 'gelir' ? 'Gelir' : 'Gider'} kaydedildi!`, 'success');
     setForm({ amount: '', description: '', kasa: 'nakit', cariId: '', category: '' });
     setIncomeModal(false);
@@ -129,6 +133,7 @@ export default function Kasa({ db, save }: Props) {
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
         <button onClick={() => setIncomeModal(true)} style={{ background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 10, color: '#10b981', padding: '10px 18px', fontWeight: 700, cursor: 'pointer' }}>+ Gelir</button>
         <button onClick={() => setExpenseModal(true)} style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 10, color: '#ef4444', padding: '10px 18px', fontWeight: 700, cursor: 'pointer' }}>- Gider</button>
+        <button onClick={() => { exportToExcel(db, { sheets: ['kasa'] }); showToast('Excel indirildi!', 'success'); }} style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 10, color: '#60a5fa', padding: '10px 16px', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}>📊 Excel İndir</button>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Ara..." style={{ padding: '9px 13px', background: '#1e293b', border: '1px solid #334155', borderRadius: 10, color: '#f1f5f9', fontSize: '0.9rem', flex: 1 }} />
         {['all', 'gelir', 'gider'].map(f => (
           <button key={f} onClick={() => setFilter(f)} style={{ padding: '8px 14px', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.82rem', background: filter === f ? '#ff5722' : '#273548', color: filter === f ? '#fff' : '#94a3b8' }}>
