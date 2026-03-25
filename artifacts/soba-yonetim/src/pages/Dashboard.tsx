@@ -182,6 +182,9 @@ export default function Dashboard({ db, onTabChange }: Props) {
         </div>
       </div>
 
+      {/* ÖNERILER */}
+      <Oneriler db={db} onTabChange={onTabChange} />
+
       {/* BOTTOM ROW */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
         {/* Recent Sales */}
@@ -262,6 +265,52 @@ export default function Dashboard({ db, onTabChange }: Props) {
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function Oneriler({ db, onTabChange }: { db: DB; onTabChange: (tab: string) => void }) {
+  const tips = useMemo(() => {
+    const list: { icon: string; text: string; action: string; tab: string; level: 'warn' | 'info' | 'ok' }[] = [];
+    const outStock = db.products.filter(p => p.stock === 0);
+    const lowStock = db.products.filter(p => p.stock > 0 && p.stock <= p.minStock);
+    if (outStock.length > 0) list.push({ icon: '⚠️', text: `${outStock.length} ürün stok bitti: ${outStock.slice(0, 2).map(p => p.name).join(', ')}${outStock.length > 2 ? '...' : ''}`, action: 'Ürünlere Git', tab: 'products', level: 'warn' });
+    if (lowStock.length > 0) list.push({ icon: '📦', text: `${lowStock.length} üründe az stok uyarısı var`, action: 'Stoka Git', tab: 'stock', level: 'warn' });
+    const toplar = db.cari.filter(c => c.type === 'musteri' && c.balance > 0);
+    if (toplar.length > 0) list.push({ icon: '💳', text: `${toplar.length} müşteride toplam ${toplar.reduce((s, c) => s + c.balance, 0).toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })} alacak var`, action: 'Cari Hesaplar', tab: 'cari', level: 'info' });
+    const pendingOrders = db.orders.filter(o => o.status === 'bekliyor');
+    if (pendingOrders.length > 0) list.push({ icon: '🚚', text: `${pendingOrders.length} bekleyen sipariş var`, action: 'Tedarikçilere Git', tab: 'suppliers', level: 'info' });
+    const unmatched = db.bankTransactions.filter(t => t.status === 'unmatched');
+    if (unmatched.length > 0) list.push({ icon: '🏦', text: `${unmatched.length} banka işlemi eşleştirilmemiş`, action: 'Bankaya Git', tab: 'bank', level: 'info' });
+    const todaySales = db.sales.filter(s => new Date(s.createdAt).toDateString() === new Date().toDateString() && s.status === 'tamamlandi');
+    if (todaySales.length === 0 && db.products.length > 0) list.push({ icon: '💡', text: 'Bugün henüz satış yapılmadı. Hızlı satış için + butonunu kullanın.', action: 'Satışlara Git', tab: 'sales', level: 'ok' });
+    if (db.products.length === 0) list.push({ icon: '🏁', text: 'Başlamak için önce ürün ekleyin.', action: 'Ürün Ekle', tab: 'products', level: 'ok' });
+    return list.slice(0, 4);
+  }, [db]);
+
+  if (tips.length === 0) return null;
+
+  const levelColor: Record<string, string> = { warn: '#f59e0b', info: '#3b82f6', ok: '#10b981' };
+  const levelBg: Record<string, string> = { warn: 'rgba(245,158,11,0.08)', info: 'rgba(59,130,246,0.08)', ok: 'rgba(16,185,129,0.08)' };
+
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <span style={{ fontSize: '0.85rem' }}>💡</span>
+        <h3 style={{ fontWeight: 700, fontSize: '0.9rem', color: '#f1f5f9' }}>Akıllı Öneriler</h3>
+        <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+        {tips.map((tip, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: levelBg[tip.level], border: `1px solid ${levelColor[tip.level]}18`, borderRadius: 12, borderLeft: `3px solid ${levelColor[tip.level]}` }}>
+            <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>{tip.icon}</span>
+            <span style={{ flex: 1, color: '#94a3b8', fontSize: '0.82rem', lineHeight: 1.4 }}>{tip.text}</span>
+            <button onClick={() => onTabChange(tip.tab)} style={{ background: `${levelColor[tip.level]}18`, border: `1px solid ${levelColor[tip.level]}30`, borderRadius: 7, color: levelColor[tip.level], padding: '4px 10px', cursor: 'pointer', fontWeight: 700, fontSize: '0.72rem', whiteSpace: 'nowrap' }}>
+              {tip.action} →
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   );
